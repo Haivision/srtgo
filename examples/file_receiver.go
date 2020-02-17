@@ -3,11 +3,12 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"github.com/haivision/srtgo"
 	"os"
+
+	"github.com/haivision/srtgo"
 )
 
-func main() int {
+func main() {
 	options := make(map[string]string)
 	options["blocking"] = "0"
 	options["transtype"] = "file"
@@ -15,7 +16,7 @@ func main() int {
 	port := 8090
 
 	fmt.Printf("(srt://%s:%d) Listening", hostname, port)
-	a := srtgo.NewSrtSocket(hostname, port, options)
+	a := srtgo.NewSrtSocket(hostname, uint16(port), options)
 	err := a.Listen(2)
 	defer a.Close()
 	if err != nil {
@@ -50,6 +51,4 @@ func main() int {
 		s.Close()
 		fo.Close()
 	}
-
-	return 0
 }
