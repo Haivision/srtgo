@@ -12,7 +12,7 @@ import (
     "syscall"
 )
 
-// Socket mode
+// SRT Socket mode
 const (
 	ModeFailure = iota
 	ModeListener
@@ -22,10 +22,11 @@ const (
 
 // Binding ops
 const (
-	BindingPre  = 0
-	BindingPost = 1
+	bindingPre  = 0
+	bindingPost = 1
 )
 
+// SRT socket
 type SrtSocket struct {
 	socket       C.int
 	epollConnect C.int
@@ -40,12 +41,12 @@ type SrtSocket struct {
 
 const defaultPacketSize = 1456
 
-// Init srt lib
+// Initialize srt library
 func InitSRT() {
 	C.srt_startup()
 }
 
-// clean srt lib
+// Cleanup SRT lib
 func CleanupSRT() {
 	C.srt_cleanup()
 }
@@ -124,6 +125,7 @@ func newFromSocket(acceptSocket *SrtSocket, socket C.SRTSOCKET) *SrtSocket {
     return s
 }
 
+// Start listening for incoming connections
 func (s SrtSocket) Listen(clients int) error {
     nclients := C.int(clients)
 
@@ -152,7 +154,7 @@ func (s SrtSocket) Listen(clients int) error {
 	return nil
 }
 
-// Accept a connection
+// Accept an incoming connection
 func (s SrtSocket) Accept() (*SrtSocket, error) {
     if !s.blocking {
 		// Socket readiness for connection is checked by polling on WRITE allowed sockets.
@@ -181,7 +183,7 @@ func (s SrtSocket) Accept() (*SrtSocket, error) {
     return newSocket, nil
 }
 
-// Connect
+// Connect to a remote endpoint
 func (s SrtSocket) Connect() error {
     sa, salen, err := CreateAddrInet(s.host, s.port)
     if err != nil {
@@ -217,7 +219,7 @@ func (s SrtSocket) Connect() error {
     return nil
 }
 
-// Read data
+// Read data from the SRT socket
 func (s SrtSocket) Read(b []byte, timeout int) (n int, err error) {
     if !s.blocking {
         len := C.int(2)
@@ -240,7 +242,7 @@ func (s SrtSocket) Read(b []byte, timeout int) (n int, err error) {
     return int(res), nil
 }
 
-// Write data
+// Write data to the SRT socket
 func (s SrtSocket) Write(b []byte, timeout int) (n int, err error) {
     if !s.blocking {
         timeoutMs := C.longlong(timeout)
@@ -262,6 +264,7 @@ func (s SrtSocket) Write(b []byte, timeout int) (n int, err error) {
     return int(res), nil
 }
 
+// Retrieve stats from the SRT socket
 func (s SrtSocket) Stats() (*SrtStats, error) {
     var stats C.SRT_TRACEBSTATS = C.SRT_TRACEBSTATS{}
     var b C.int = 1
@@ -269,21 +272,21 @@ func (s SrtSocket) Stats() (*SrtStats, error) {
         return nil, fmt.Errorf("Error getting stats")
     }
 
-    return NewSrtStats(&stats), nil
+    return newSrtStats(&stats), nil
 }
 
 
-// Return mode
+// Return working mode of the SRT socket
 func (s SrtSocket) Mode() int {
     return s.mode
 }
 
-// Return packet size
+// Return packet size of the SRT socket
 func (s SrtSocket) PacketSize() int {
     return s.pktSize
 }
 
-// Close the socket
+// Close the SRT socket
 func (s SrtSocket) Close() {
 	if !s.blocking {
 		if s.epollConnect != -1 {
@@ -339,13 +342,13 @@ func (s SrtSocket) preconfiguration() (int, error) {
 	if linger, ok := s.options["linger"]; ok {
 		li, err := strconv.Atoi(linger)
 		if err == nil {
-			SetSocketLingerOption(s.socket, int32(li))
+			setSocketLingerOption(s.socket, int32(li))
 		} else {
 			return ModeFailure, fmt.Errorf("Could not set LINGER option")
 		}
 	}
 
-	err := SetSocketOptions(s.socket, BindingPre, s.options)
+	err := setSocketOptions(s.socket, bindingPre, s.options)
 	if err != nil {
 		return ModeFailure, fmt.Errorf("Error setting socket options")
 	}
@@ -373,6 +376,6 @@ func (s SrtSocket) postconfiguration(sck *SrtSocket) error {
         fmt.Errorf("Error in postconfiguration setting SRTO_RCVSYN")
     }
 
-    err := SetSocketOptions(sck.socket, BindingPost, s.options)
+    err := setSocketOptions(sck.socket, bindingPost, s.options)
 	return err
 }

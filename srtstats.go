@@ -5,7 +5,7 @@ package srtgo
 import "C"
 
 type SrtStats struct {
-	// global measurements
+	// Global measurements
 	MsTimeStamp     int64 // time since the UDT entity is started, in milliseconds
 	PktSentTotal    int64 // total number of sent data packets, including retransmissions
 	PktRecvTotal    int64 // total number of received packets
@@ -18,7 +18,6 @@ type SrtStats struct {
 	PktRecvNAKTotal    int   // total number of received NAK packets
 	UsSndDurationTotal int64 // total time duration when UDT is sending data (idle time exclusive)
 
-	//>new
 	PktSndDropTotal      int   // number of too-late-to-send dropped packets
 	PktRcvDropTotal      int   // number of too-late-to play missing packets
 	PktRcvUndecryptTotal int   // number of undecrypted packets
@@ -30,9 +29,8 @@ type SrtStats struct {
 	ByteSndDropTotal      int64 // number of too-late-to-send dropped bytes
 	ByteRcvDropTotal      int64 // number of too-late-to play missing bytes (estimate based on average packet size)
 	ByteRcvUndecryptTotal int64 // number of undecrypted bytes
-	//<
 
-	// local measurements
+	// Local measurements
 	PktSent              int64   // number of sent data packets, including retransmissions
 	PktRecv              int64   // number of received packets
 	PktSndLoss           int     // number of lost packets (sender side)
@@ -49,7 +47,7 @@ type SrtStats struct {
 	PktReorderDistance   int     // size of order discrepancy in received sequences
 	PktRcvAvgBelatedTime float64 // average time of packet delay for belated packets (packets with sequence past the ACK)
 	PktRcvBelated        int64   // number of received AND IGNORED packets due to having come too late
-	//>new
+
 	PktSndDrop      int   // number of too-late-to-send dropped packets
 	PktRcvDrop      int   // number of too-late-to play missing packets
 	PktRcvUndecrypt int   // number of undecrypted packets
@@ -61,9 +59,9 @@ type SrtStats struct {
 	ByteSndDrop      int64 // number of too-late-to-send dropped Bytes
 	ByteRcvDrop      int64 // number of too-late-to play missing Bytes (estimate based on average packet size)
 	ByteRcvUndecrypt int64 // number of undecrypted bytes
-	//<
 
-	// instant measurements
+
+	// Instant measurements
 	UsPktSndPeriod      float64 // packet sending period, in microseconds
 	PktFlowWindow       int     // flow window size, in number of packets
 	PktCongestionWindow int     // congestion window size, in number of packets
@@ -72,7 +70,7 @@ type SrtStats struct {
 	MbpsBandwidth       float64 // estimated bandwidth, in Mb/s
 	ByteAvailSndBuf     int     // available UDT sender buffer size
 	ByteAvailRcvBuf     int     // available UDT receiver buffer size
-	//>new
+
 	MbpsMaxBW float64 // Transmit Bandwidth ceiling (Mbps)
 	ByteMSS  int     // MTU
 
@@ -96,10 +94,9 @@ type SrtStats struct {
 	PktRcvFilterSupply  int // number of packets that the filter supplied extra (e.g. FEC rebuilt)
 	PktRcvFilterLoss    int // number of packet loss not coverable by filter
 	PktReorderTolerance int // packet reorder tolerance value
-	//<
 }
 
-func NewSrtStats(stats *C.SRT_TRACEBSTATS) *SrtStats {
+func newSrtStats(stats *C.SRT_TRACEBSTATS) *SrtStats {
 	s := new(SrtStats)
 
 	s.MsTimeStamp        = int64(stats.msTimeStamp)
