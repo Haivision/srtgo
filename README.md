@@ -1,3 +1,5 @@
+[![GoDoc](https://godoc.org/github.com/Haivision/srtgo?status.svg)](https://godoc.org/github.com/Haivision/srtgo)
+
 # srtgo
 
 Go bindings for [SRT](https://github.com/Haivision/srt) (Secure Reliable Transport), the open source transport technology that optimizes streaming performance across unpredictable networks.
