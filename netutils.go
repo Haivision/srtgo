@@ -1,5 +1,6 @@
 package srtgo
 
+// #include <srt/srt.h>
 import "C"
 
 import (
@@ -11,7 +12,6 @@ import (
 
 func sockAddrFromIp4(ip net.IP, port uint16) (*C.struct_sockaddr, int, error) {
 	var raw syscall.RawSockaddrInet4
-	raw.Len = syscall.SizeofSockaddrInet4
 	raw.Family = syscall.AF_INET
 
 	p := (*[2]byte)(unsafe.Pointer(&raw.Port))
@@ -20,12 +20,11 @@ func sockAddrFromIp4(ip net.IP, port uint16) (*C.struct_sockaddr, int, error) {
 
 	copy(raw.Addr[:], ip.To4())
 
-	return (*C.struct_sockaddr)(unsafe.Pointer(&raw)), int(raw.Len), nil
+	return (*C.struct_sockaddr)(unsafe.Pointer(&raw)), int(syscall.SizeofSockaddrInet4), nil
 }
 
 func sockAddrFromIp6(ip net.IP, port uint16) (*C.struct_sockaddr, int, error) {
 	var raw syscall.RawSockaddrInet6
-	raw.Len = syscall.SizeofSockaddrInet6
 	raw.Family = syscall.AF_INET6
 
 	p := (*[2]byte)(unsafe.Pointer(&raw.Port))
@@ -34,7 +33,7 @@ func sockAddrFromIp6(ip net.IP, port uint16) (*C.struct_sockaddr, int, error) {
 
 	copy(raw.Addr[:], ip.To16())
 
-	return (*C.struct_sockaddr)(unsafe.Pointer(&raw)), int(raw.Len), nil
+	return (*C.struct_sockaddr)(unsafe.Pointer(&raw)), int(syscall.SizeofSockaddrInet6), nil
 }
 
 func CreateAddrInet(name string, port uint16) (*C.struct_sockaddr, int, error) {

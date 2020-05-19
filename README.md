@@ -30,7 +30,7 @@ import (
     "fmt"
 )
 
-func main() int {
+func main() {
     options := make(map[string]string)
     options["transtype"] = "file"
 
