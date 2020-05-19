@@ -169,7 +169,7 @@ func (s SrtSocket) Accept() (*SrtSocket, error) {
 	if !s.blocking {
 		// Socket readiness for connection is checked by polling on WRITE allowed sockets.
 		len := C.int(2)
-		timeoutMs := C.long(-1)
+		timeoutMs := C.longlong(-1)
 		ready := [2]C.int{SRT_INVALID_SOCK, SRT_INVALID_SOCK}
 		if C.srt_epoll_wait(s.epollConnect, nil, nil, &ready[0], &len, timeoutMs, nil, nil, nil, nil) == -1 {
 			return nil, fmt.Errorf("srt accept, epoll wait issue")
@@ -209,7 +209,7 @@ func (s SrtSocket) Connect() error {
 	if !s.blocking {
 		// Socket readiness for connection is checked by polling on WRITE allowed sockets.
 		len := C.int(2)
-		timeoutMs := C.long(-1)
+		timeoutMs := C.longlong(-1)
 		ready := [2]C.int{SRT_INVALID_SOCK, SRT_INVALID_SOCK}
 		if C.srt_epoll_wait(s.epollConnect, nil, nil, &ready[0], &len, timeoutMs, nil, nil, nil, nil) != -1 {
 			state := C.srt_getsockstate(s.socket)
@@ -233,7 +233,7 @@ func (s SrtSocket) Connect() error {
 func (s SrtSocket) Read(b []byte, timeout int) (n int, err error) {
 	if !s.blocking {
 		len := C.int(2)
-		timeoutMs := C.long(timeout)
+		timeoutMs := C.longlong(timeout)
 		ready := [2]C.int{SRT_INVALID_SOCK, SRT_INVALID_SOCK}
 
 		if C.srt_epoll_wait(s.epollIo, &ready[0], &len, nil, nil, timeoutMs, nil, nil, nil, nil) == SRT_ERROR {
@@ -255,7 +255,7 @@ func (s SrtSocket) Read(b []byte, timeout int) (n int, err error) {
 // Write data to the SRT socket
 func (s SrtSocket) Write(b []byte, timeout int) (n int, err error) {
 	if !s.blocking {
-		timeoutMs := C.long(timeout)
+		timeoutMs := C.longlong(timeout)
 		len := C.int(2)
 		ready := [2]C.int{SRT_INVALID_SOCK, SRT_INVALID_SOCK}
 		rlen := C.int(2)
