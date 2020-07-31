@@ -30,7 +30,7 @@ const (
 	bindingPost = 1
 )
 
-// SRT socket
+// SrtSocket - SRT socket
 type SrtSocket struct {
 	socket       C.int
 	epollConnect C.int
@@ -43,7 +43,7 @@ type SrtSocket struct {
 	pktSize      int
 }
 
-//Static consts from library
+// Static consts from library
 var (
 	SRT_INVALID_SOCK = C.get_srt_invalid_sock()
 	SRT_ERROR        = C.get_srt_error()
@@ -51,17 +51,17 @@ var (
 
 const defaultPacketSize = 1456
 
-// Initialize srt library
+// InitSRT - Initialize srt library
 func InitSRT() {
 	C.srt_startup()
 }
 
-// Cleanup SRT lib
+// CleanupSRT - Cleanup SRT lib
 func CleanupSRT() {
 	C.srt_cleanup()
 }
 
-// Create a new SRT Socket
+// NewSrtSocket - Create a new SRT Socket
 func NewSrtSocket(host string, port uint16, options map[string]string) *SrtSocket {
 	s := new(SrtSocket)
 
@@ -135,7 +135,7 @@ func newFromSocket(acceptSocket *SrtSocket, socket C.SRTSOCKET) *SrtSocket {
 	return s
 }
 
-// Start listening for incoming connections
+// Listen for incoming connections
 func (s SrtSocket) Listen(clients int) error {
 	nclients := C.int(clients)
 
@@ -274,7 +274,7 @@ func (s SrtSocket) Write(b []byte, timeout int) (n int, err error) {
 	return int(res), nil
 }
 
-// Retrieve stats from the SRT socket
+// Stats - Retrieve stats from the SRT socket
 func (s SrtSocket) Stats() (*SrtStats, error) {
 	var stats C.SRT_TRACEBSTATS = C.SRT_TRACEBSTATS{}
 	var b C.int = 1
@@ -285,12 +285,12 @@ func (s SrtSocket) Stats() (*SrtStats, error) {
 	return newSrtStats(&stats), nil
 }
 
-// Return working mode of the SRT socket
+// Mode - Return working mode of the SRT socket
 func (s SrtSocket) Mode() int {
 	return s.mode
 }
 
-// Return packet size of the SRT socket
+// PacketSize - Return packet size of the SRT socket
 func (s SrtSocket) PacketSize() int {
 	return s.pktSize
 }
@@ -309,6 +309,105 @@ func (s SrtSocket) Close() {
 	}
 	C.srt_close(s.socket)
 	log.Println("Connection closed")
+}
+
+// GetSockOptByte - return byte value obtained with srt_getsockopt
+func (s SrtSocket) GetSockOptByte(opt int) (byte, error) {
+	var v byte
+	l := 1
+
+	err := s.getSockOpt(opt, unsafe.Pointer(&v), &l)
+	return v, err
+}
+
+// GetSockOptBool - return bool value obtained with srt_getsockopt
+func (s SrtSocket) GetSockOptBool(opt int) (bool, error) {
+	var v int32
+	l := 4
+
+	err := s.getSockOpt(opt, unsafe.Pointer(&v), &l)
+	if v == 1 {
+		return true, err
+	}
+
+	return false, err
+}
+
+// GetSockOptInt - return int value obtained with srt_getsockopt
+func (s SrtSocket) GetSockOptInt(opt int) (int, error) {
+	var v int32
+	l := 4
+
+	err := s.getSockOpt(opt, unsafe.Pointer(&v), &l)
+	return int(v), err
+}
+
+// GetSockOptInt64 - return int64 value obtained with srt_getsockopt
+func (s SrtSocket) GetSockOptInt64(opt int) (int64, error) {
+	var v int64
+	l := 8
+
+	err := s.getSockOpt(opt, unsafe.Pointer(&v), &l)
+	return v, err
+}
+
+// GetSockOptString - return string value obtained with srt_getsockopt
+func (s SrtSocket) GetSockOptString(opt int) (string, error) {
+	buf := make([]byte, 256)
+	l := len(buf)
+
+	err := s.getSockOpt(opt, unsafe.Pointer(&buf[0]), &l)
+	if err != nil {
+		return "", err
+	}
+	return string(buf[:l]), nil
+}
+
+// SetSockOptByte - set byte value using srt_setsockopt
+func (s SrtSocket) SetSockOptByte(opt int, value byte) error {
+	return s.setSockOpt(opt, unsafe.Pointer(&value), 1)
+}
+
+// SetSockOptBool - set bool value using srt_setsockopt
+func (s SrtSocket) SetSockOptBool(opt int, value bool) error {
+	val := int(0)
+	if value {
+		val = 1
+	}
+	return s.setSockOpt(opt, unsafe.Pointer(&val), 4)
+}
+
+// SetSockOptInt - set int value using srt_setsockopt
+func (s SrtSocket) SetSockOptInt(opt int, value int) error {
+	return s.setSockOpt(opt, unsafe.Pointer(&value), 4)
+}
+
+// SetSockOptInt64 - set int64 value using srt_setsockopt
+func (s SrtSocket) SetSockOptInt64(opt int, value int64) error {
+	return s.setSockOpt(opt, unsafe.Pointer(&value), 8)
+}
+
+// SetSockOptString - set string value using srt_setsockopt
+func (s SrtSocket) SetSockOptString(opt int, value string) error {
+	return s.setSockOpt(opt, unsafe.Pointer(&[]byte(value)[0]), len(value))
+}
+
+func (s SrtSocket) setSockOpt(opt int, data unsafe.Pointer, size int) error {
+	res := C.srt_setsockopt(s.socket, 0, C.SRT_SOCKOPT(opt), data, C.int(size))
+	if res == -1 {
+		fmt.Errorf("Error calling srt_setsockopt")
+	}
+
+	return nil
+}
+
+func (s SrtSocket) getSockOpt(opt int, data unsafe.Pointer, size *int) error {
+	res := C.srt_getsockopt(s.socket, 0, C.SRT_SOCKOPT(opt), data, (*C.int)(unsafe.Pointer(size)))
+	if res == -1 {
+		fmt.Errorf("Error calling srt_getsockopt")
+	}
+
+	return nil
 }
 
 func (s SrtSocket) preconfiguration() (int, error) {
@@ -366,7 +465,6 @@ func (s SrtSocket) preconfiguration() (int, error) {
 }
 
 func (s SrtSocket) postconfiguration(sck *SrtSocket) error {
-
 	var blocking C.int
 	if s.blocking {
 		blocking = 1

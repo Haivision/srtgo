@@ -96,3 +96,51 @@ func TestListen(t *testing.T) {
 		t.Error("Error on testListen")
 	}
 }
+
+func TestSetSockOptInt(t *testing.T) {
+	InitSRT()
+	options := make(map[string]string)
+	a := NewSrtSocket("localhost", 8090, options)
+
+	err := a.SetSockOptInt(16, 20000)
+	if err != nil {
+		t.Error("Error on TestSetSockOpt")
+	}
+
+	v, err := a.GetSockOptInt(16)
+	if v != 20000 {
+		t.Error("Error in SetSockOptInt/GetSockOptInt", v)
+	}
+}
+
+func TestSetSockOptString(t *testing.T) {
+	InitSRT()
+	options := make(map[string]string)
+	a := NewSrtSocket("localhost", 8090, options)
+
+	err := a.SetSockOptString(46, "123")
+	if err != nil {
+		t.Error("Error on TestSetSockOpt")
+	}
+
+	v, err := a.GetSockOptString(46)
+	if v != "123" {
+		t.Error("Error in SetSockOptString/GetSockOptString", v)
+	}
+}
+
+func TestSetSockOptBool(t *testing.T) {
+	InitSRT()
+	options := make(map[string]string)
+	a := NewSrtSocket("localhost", 8090, options)
+
+	err := a.SetSockOptBool(48, true)
+	if err != nil {
+		t.Error("Error on TestSetSockOpt")
+	}
+
+	v, err := a.GetSockOptBool(48)
+	if v != true {
+		t.Error("Error in SetSockOptBool/GetSockOptBool", v)
+	}
+}
