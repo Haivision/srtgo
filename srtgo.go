@@ -10,7 +10,7 @@ import "C"
 
 import (
 	"fmt"
-	"log"
+	"net"
 	"strconv"
 	"syscall"
 	"unsafe"
@@ -113,7 +113,7 @@ func NewSrtSocket(host string, port uint16, options map[string]string) *SrtSocke
 	return s
 }
 
-func newFromSocket(acceptSocket *SrtSocket, socket C.SRTSOCKET) *SrtSocket {
+func newFromSocket(acceptSocket *SrtSocket, socket C.SRTSOCKET) (*SrtSocket, error) {
 	s := new(SrtSocket)
 	s.socket = socket
 	s.pktSize = acceptSocket.pktSize
@@ -121,18 +121,18 @@ func newFromSocket(acceptSocket *SrtSocket, socket C.SRTSOCKET) *SrtSocket {
 
 	err := acceptSocket.postconfiguration(s)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 
 	if !s.blocking {
 		s.epollIo = C.srt_epoll_create()
 		var modes C.int = C.SRT_EPOLL_IN | C.SRT_EPOLL_OUT | C.SRT_EPOLL_ERR
 		if C.srt_epoll_add_usock(s.epollIo, s.socket, &modes) == SRT_ERROR {
-			return nil
+			return nil, fmt.Errorf("srt epoll: %v", C.GoString(C.srt_getlasterror_str()))
 		}
 	}
 
-	return s
+	return s, nil
 }
 
 // Listen for incoming connections
@@ -165,32 +165,35 @@ func (s SrtSocket) Listen(clients int) error {
 }
 
 // Accept an incoming connection
-func (s SrtSocket) Accept() (*SrtSocket, error) {
+func (s SrtSocket) Accept() (*SrtSocket, *net.UDPAddr, error) {
 	if !s.blocking {
 		// Socket readiness for connection is checked by polling on WRITE allowed sockets.
 		len := C.int(2)
 		timeoutMs := C.int64_t(-1)
 		ready := [2]C.int{SRT_INVALID_SOCK, SRT_INVALID_SOCK}
 		if C.srt_epoll_wait(s.epollConnect, nil, nil, &ready[0], &len, timeoutMs, nil, nil, nil, nil) == -1 {
-			return nil, fmt.Errorf("srt accept, epoll wait issue")
+			return nil, nil, fmt.Errorf("srt accept, epoll wait issue")
 		}
 	}
 
-	var scl syscall.RawSockaddrInet4
-	sclen := C.int(syscall.SizeofSockaddrInet4)
-	socket := C.srt_accept(s.socket, (*C.struct_sockaddr)(unsafe.Pointer(&scl)), &sclen)
+	var addr syscall.RawSockaddrAny
+	sclen := C.int(syscall.SizeofSockaddrAny)
+	socket := C.srt_accept(s.socket, (*C.struct_sockaddr)(unsafe.Pointer(&addr)), &sclen)
 	if socket == SRT_INVALID_SOCK {
-		return nil, fmt.Errorf("srt accept, error accepting the connection")
+		return nil, nil, fmt.Errorf("srt accept, error accepting the connection: %v", C.GoString(C.srt_getlasterror_str()))
 	}
 
-	log.Println("Connection accepted!")
-
-	newSocket := newFromSocket(&s, socket)
-	if newSocket == nil {
-		return nil, fmt.Errorf("new socket could not be created")
+	newSocket, err := newFromSocket(&s, socket)
+	if err != nil {
+		return nil, nil, fmt.Errorf("new socket could not be created: %w", err)
 	}
 
-	return newSocket, nil
+	udpAddr, err := udpAddrFromSockaddr(&addr)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return newSocket, udpAddr, nil
 }
 
 // Connect to a remote endpoint
@@ -308,7 +311,6 @@ func (s SrtSocket) Close() {
 		}
 	}
 	C.srt_close(s.socket)
-	log.Println("Connection closed")
 }
 
 // GetSockOptByte - return byte value obtained with srt_getsockopt

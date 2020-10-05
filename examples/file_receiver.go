@@ -24,7 +24,7 @@ func main() {
 	}
 
 	for {
-		s, err := a.Accept()
+		s, _, err := a.Accept()
 		if err != nil {
 			panic("Error on Accept")
 			break
