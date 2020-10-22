@@ -4,11 +4,44 @@ package srtgo
 import "C"
 
 import (
+	"encoding/binary"
 	"fmt"
 	"net"
 	"syscall"
 	"unsafe"
+
+	"golang.org/x/sys/unix"
 )
+
+func ntohs(val uint16) uint16 {
+	tmp := ((*[unsafe.Sizeof(val)]byte)(unsafe.Pointer(&val)))
+	return binary.BigEndian.Uint16((*tmp)[:])
+}
+
+func udpAddrFromSockaddr(addr *syscall.RawSockaddrAny) (*net.UDPAddr, error) {
+	var udpAddr net.UDPAddr
+
+	switch addr.Addr.Family {
+	case unix.AF_INET6:
+		ptr := (*syscall.RawSockaddrInet6)(unsafe.Pointer(addr))
+		udpAddr.Port = int(ntohs(ptr.Port))
+		udpAddr.IP = ptr.Addr[:]
+
+	case unix.AF_INET:
+		ptr := (*syscall.RawSockaddrInet4)(unsafe.Pointer(addr))
+		udpAddr.Port = int(ntohs(ptr.Port))
+		udpAddr.IP = net.IPv4(
+			ptr.Addr[0],
+			ptr.Addr[1],
+			ptr.Addr[2],
+			ptr.Addr[3],
+		)
+	default:
+		fmt.Errorf("Unknown address family: %v", addr.Addr.Family)
+	}
+
+	return &udpAddr, nil
+}
 
 func sockAddrFromIp4(ip net.IP, port uint16) (*C.struct_sockaddr, int, error) {
 	var raw syscall.RawSockaddrInet4
