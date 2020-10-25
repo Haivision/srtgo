@@ -1,4 +1,4 @@
-module github.com/chetan-prime/srtgo
+module github.com/haivision/srtgo
 
 go 1.12
 
