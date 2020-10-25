@@ -22,6 +22,38 @@ const (
 	tString    = 2
 	tBoolean   = 3
 	tTransType = 4
+
+	SRTO_TRANSTYPE = C.SRTO_TRANSTYPE
+	SRTO_MAXBW = C.SRTO_MAXBW
+	SRTO_PBKEYLEN = C.SRTO_PBKEYLEN
+	SRTO_PASSPHRASE = C.SRTO_PASSPHRASE
+	SRTO_MSS = C.SRTO_MSS
+	SRTO_FC = C.SRTO_FC
+	SRTO_SNDBUF = C.SRTO_SNDBUF
+	SRTO_RCVBUF = C.SRTO_RCVBUF
+	SRTO_IPTTL = C.SRTO_IPTTL
+	SRTO_IPTOS = C.SRTO_IPTOS
+	SRTO_INPUTBW = C.SRTO_INPUTBW
+	SRTO_OHEADBW = C.SRTO_OHEADBW
+	SRTO_LATENCY = C.SRTO_LATENCY
+	SRTO_TSBPDMODE = C.SRTO_TSBPDMODE
+	SRTO_TLPKTDROP = C.SRTO_TLPKTDROP
+	SRTO_SNDDROPDELAY = C.SRTO_SNDDROPDELAY
+	SRTO_NAKREPORT = C.SRTO_NAKREPORT
+	SRTO_CONNTIMEO = C.SRTO_CONNTIMEO
+	SRTO_LOSSMAXTTL = C.SRTO_LOSSMAXTTL
+	SRTO_RCVLATENCY = C.SRTO_RCVLATENCY
+	SRTO_PEERLATENCY = C.SRTO_PEERLATENCY
+	SRTO_MINVERSION = C.SRTO_MINVERSION
+	SRTO_STREAMID = C.SRTO_STREAMID
+	SRTO_CONGESTION = C.SRTO_CONGESTION
+	SRTO_MESSAGEAPI = C.SRTO_MESSAGEAPI
+	SRTO_PAYLOADSIZE = C.SRTO_PAYLOADSIZE
+	SRTO_KMREFRESHRATE = C.SRTO_KMREFRESHRATE
+	SRTO_KMPREANNOUNCE = C.SRTO_KMPREANNOUNCE
+	SRTO_ENFORCEDENCRYPTION = C.SRTO_ENFORCEDENCRYPTION
+	SRTO_PEERIDLETIMEO = C.SRTO_PEERIDLETIMEO
+	SRTO_PACKETFILTER = C.SRTO_PACKETFILTER
 )
 
 type socketOption struct {
@@ -34,37 +66,37 @@ type socketOption struct {
 
 // List of possible srt socket options
 var SocketOptions = []socketOption{
-	{"transtype", 0, C.SRTO_TRANSTYPE, bindingPre, tTransType},
-	{"maxbw", 0, C.SRTO_MAXBW, bindingPre, tInteger64},
-	{"pbkeylen", 0, C.SRTO_PBKEYLEN, bindingPre, tInteger32},
-	{"passphrase", 0, C.SRTO_PASSPHRASE, bindingPre, tString},
-	{"mss", 0, C.SRTO_MSS, bindingPre, tInteger32},
-	{"fc", 0, C.SRTO_FC, bindingPre, tInteger32},
-	{"sndbuf", 0, C.SRTO_SNDBUF, bindingPre, tInteger32},
-	{"rcvbuf", 0, C.SRTO_RCVBUF, bindingPre, tInteger32},
-	{"ipttl", 0, C.SRTO_IPTTL, bindingPre, tInteger32},
-	{"iptos", 0, C.SRTO_IPTOS, bindingPre, tInteger32},
-	{"inputbw", 0, C.SRTO_INPUTBW, bindingPost, tInteger64},
-	{"oheadbw", 0, C.SRTO_OHEADBW, bindingPost, tInteger32},
-	{"latency", 0, C.SRTO_LATENCY, bindingPre, tInteger32},
-	{"tsbpdmode", 0, C.SRTO_TSBPDMODE, bindingPre, tBoolean},
-	{"tlpktdrop", 0, C.SRTO_TLPKTDROP, bindingPre, tBoolean},
-	{"snddropdelay", 0, C.SRTO_SNDDROPDELAY, bindingPost, tInteger32},
-	{"nakreport", 0, C.SRTO_NAKREPORT, bindingPre, tBoolean},
-	{"conntimeo", 0, C.SRTO_CONNTIMEO, bindingPre, tInteger32},
-	{"lossmaxttl", 0, C.SRTO_LOSSMAXTTL, bindingPre, tInteger32},
-	{"rcvlatency", 0, C.SRTO_RCVLATENCY, bindingPre, tInteger32},
-	{"peerlatency", 0, C.SRTO_PEERLATENCY, bindingPre, tInteger32},
-	{"minversion", 0, C.SRTO_MINVERSION, bindingPre, tInteger32},
-	{"streamid", 0, C.SRTO_STREAMID, bindingPre, tString},
-	{"congestion", 0, C.SRTO_CONGESTION, bindingPre, tString},
-	{"messageapi", 0, C.SRTO_MESSAGEAPI, bindingPre, tBoolean},
-	{"payloadsize", 0, C.SRTO_PAYLOADSIZE, bindingPre, tInteger32},
-	{"kmrefreshrate", 0, C.SRTO_KMREFRESHRATE, bindingPre, tInteger32},
-	{"kmpreannounce", 0, C.SRTO_KMPREANNOUNCE, bindingPre, tInteger32},
-	{"enforcedencryption", 0, C.SRTO_ENFORCEDENCRYPTION, bindingPre, tBoolean},
-	{"peeridletimeo", 0, C.SRTO_PEERIDLETIMEO, bindingPre, tInteger32},
-	{"packetfilter", 0, C.SRTO_PACKETFILTER, bindingPre, tString},
+	{"transtype", 0, SRTO_TRANSTYPE, bindingPre, tTransType},
+	{"maxbw", 0, SRTO_MAXBW, bindingPre, tInteger64},
+	{"pbkeylen", 0, SRTO_PBKEYLEN, bindingPre, tInteger32},
+	{"passphrase", 0, SRTO_PASSPHRASE, bindingPre, tString},
+	{"mss", 0, SRTO_MSS, bindingPre, tInteger32},
+	{"fc", 0, SRTO_FC, bindingPre, tInteger32},
+	{"sndbuf", 0, SRTO_SNDBUF, bindingPre, tInteger32},
+	{"rcvbuf", 0, SRTO_RCVBUF, bindingPre, tInteger32},
+	{"ipttl", 0, SRTO_IPTTL, bindingPre, tInteger32},
+	{"iptos", 0, SRTO_IPTOS, bindingPre, tInteger32},
+	{"inputbw", 0, SRTO_INPUTBW, bindingPost, tInteger64},
+	{"oheadbw", 0, SRTO_OHEADBW, bindingPost, tInteger32},
+	{"latency", 0, SRTO_LATENCY, bindingPre, tInteger32},
+	{"tsbpdmode", 0, SRTO_TSBPDMODE, bindingPre, tBoolean},
+	{"tlpktdrop", 0, SRTO_TLPKTDROP, bindingPre, tBoolean},
+	{"snddropdelay", 0, SRTO_SNDDROPDELAY, bindingPost, tInteger32},
+	{"nakreport", 0, SRTO_NAKREPORT, bindingPre, tBoolean},
+	{"conntimeo", 0, SRTO_CONNTIMEO, bindingPre, tInteger32},
+	{"lossmaxttl", 0, SRTO_LOSSMAXTTL, bindingPre, tInteger32},
+	{"rcvlatency", 0, SRTO_RCVLATENCY, bindingPre, tInteger32},
+	{"peerlatency", 0, SRTO_PEERLATENCY, bindingPre, tInteger32},
+	{"minversion", 0, SRTO_MINVERSION, bindingPre, tInteger32},
+	{"streamid", 0, SRTO_STREAMID, bindingPre, tString},
+	{"congestion", 0, SRTO_CONGESTION, bindingPre, tString},
+	{"messageapi", 0, SRTO_MESSAGEAPI, bindingPre, tBoolean},
+	{"payloadsize", 0, SRTO_PAYLOADSIZE, bindingPre, tInteger32},
+	{"kmrefreshrate", 0, SRTO_KMREFRESHRATE, bindingPre, tInteger32},
+	{"kmpreannounce", 0, SRTO_KMPREANNOUNCE, bindingPre, tInteger32},
+	{"enforcedencryption", 0, SRTO_ENFORCEDENCRYPTION, bindingPre, tBoolean},
+	{"peeridletimeo", 0, SRTO_PEERIDLETIMEO, bindingPre, tInteger32},
+	{"packetfilter", 0, SRTO_PACKETFILTER, bindingPre, tString},
 }
 
 func setSocketLingerOption(s C.int, li int32) error {
