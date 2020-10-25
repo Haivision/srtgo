@@ -136,7 +136,7 @@ func setSocketOptions(s C.int, binding int, options map[string]string) error {
 				} else if so.dataType == tString {
 					sval := C.CString(val)
 					defer C.free(unsafe.Pointer(sval))
-					result := C.srt_setsockflag(s, C.SRT_SOCKOPT(so.option), unsafe.Pointer(&sval), C.int32_t(len(val)))
+					result := C.srt_setsockflag(s, C.SRT_SOCKOPT(so.option), unsafe.Pointer(sval), C.int32_t(len(val)))
 					if result == -1 {
 						log.Printf("Warning - Error setting option %s to %s", so.name, val)
 					}
