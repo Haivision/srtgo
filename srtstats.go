@@ -6,13 +6,13 @@ import "C"
 
 type SrtStats struct {
 	// Global measurements
-	MsTimeStamp     int64 // time since the UDT entity is started, in milliseconds
-	PktSentTotal    int64 // total number of sent data packets, including retransmissions
-	PktRecvTotal    int64 // total number of received packets
-	PktSndLossTotal int   // total number of lost packets (sender side)
-	PktRcvLossTotal int   // total number of lost packets (receiver side)
-	PktRetransTotal int   // total number of retransmitted packets
-	PktSentACKTotal int   // total number of sent ACK packets
+	MsTimeStamp        int64 // time since the UDT entity is started, in milliseconds
+	PktSentTotal       int64 // total number of sent data packets, including retransmissions
+	PktRecvTotal       int64 // total number of received packets
+	PktSndLossTotal    int   // total number of lost packets (sender side)
+	PktRcvLossTotal    int   // total number of lost packets (receiver side)
+	PktRetransTotal    int   // total number of retransmitted packets
+	PktSentACKTotal    int   // total number of sent ACK packets
 	PktRecvACKTotal    int   // total number of received ACK packets
 	PktSentNAKTotal    int   // total number of sent NAK packets
 	PktRecvNAKTotal    int   // total number of received NAK packets
@@ -60,7 +60,6 @@ type SrtStats struct {
 	ByteRcvDrop      int64 // number of too-late-to play missing Bytes (estimate based on average packet size)
 	ByteRcvUndecrypt int64 // number of undecrypted bytes
 
-
 	// Instant measurements
 	UsPktSndPeriod      float64 // packet sending period, in microseconds
 	PktFlowWindow       int     // flow window size, in number of packets
@@ -72,7 +71,7 @@ type SrtStats struct {
 	ByteAvailRcvBuf     int     // available UDT receiver buffer size
 
 	MbpsMaxBW float64 // Transmit Bandwidth ceiling (Mbps)
-	ByteMSS  int     // MTU
+	ByteMSS   int     // MTU
 
 	PktSndBuf       int // UnACKed packets in UDT sender
 	ByteSndBuf      int // UnACKed bytes in UDT sender
@@ -99,91 +98,91 @@ type SrtStats struct {
 func newSrtStats(stats *C.SRT_TRACEBSTATS) *SrtStats {
 	s := new(SrtStats)
 
-	s.MsTimeStamp        = int64(stats.msTimeStamp)
-	s.PktSentTotal       = int64(stats.pktSentTotal)
-	s.PktRecvTotal       = int64(stats.pktRecvTotal)
-	s.PktSndLossTotal    = int(stats.pktSndLossTotal)
-	s.PktRcvLossTotal    = int(stats.pktRcvLossTotal)
-	s.PktRetransTotal    = int(stats.pktRetransTotal)
-	s.PktSentACKTotal    = int(stats.pktSentACKTotal)
-	s.PktRecvACKTotal    = int(stats.pktRecvACKTotal)
-	s.PktSentNAKTotal    = int(stats.pktSentNAKTotal)
-	s.PktRecvNAKTotal    = int(stats.pktRecvNAKTotal)
+	s.MsTimeStamp = int64(stats.msTimeStamp)
+	s.PktSentTotal = int64(stats.pktSentTotal)
+	s.PktRecvTotal = int64(stats.pktRecvTotal)
+	s.PktSndLossTotal = int(stats.pktSndLossTotal)
+	s.PktRcvLossTotal = int(stats.pktRcvLossTotal)
+	s.PktRetransTotal = int(stats.pktRetransTotal)
+	s.PktSentACKTotal = int(stats.pktSentACKTotal)
+	s.PktRecvACKTotal = int(stats.pktRecvACKTotal)
+	s.PktSentNAKTotal = int(stats.pktSentNAKTotal)
+	s.PktRecvNAKTotal = int(stats.pktRecvNAKTotal)
 	s.UsSndDurationTotal = int64(stats.usSndDurationTotal)
 
-	s.PktSndDropTotal        = int(stats.pktSndDropTotal)
-	s.PktRcvDropTotal        = int(stats.pktRcvDropTotal)
-	s.PktRcvUndecryptTotal   = int(stats.pktRcvUndecryptTotal)
-	s.ByteSentTotal          = int64(stats.byteSentTotal)
-	s.ByteRecvTotal          = int64(stats.byteRecvTotal)
-	s.ByteRcvLossTotal       = int64(stats.byteRcvLossTotal)
+	s.PktSndDropTotal = int(stats.pktSndDropTotal)
+	s.PktRcvDropTotal = int(stats.pktRcvDropTotal)
+	s.PktRcvUndecryptTotal = int(stats.pktRcvUndecryptTotal)
+	s.ByteSentTotal = int64(stats.byteSentTotal)
+	s.ByteRecvTotal = int64(stats.byteRecvTotal)
+	s.ByteRcvLossTotal = int64(stats.byteRcvLossTotal)
 
-	s.ByteRetransTotal       = int64(stats.byteRetransTotal)
-	s.ByteSndDropTotal       = int64(stats.byteSndDropTotal)
-	s.ByteRcvDropTotal       = int64(stats.byteRcvDropTotal)
-	s.ByteRcvUndecryptTotal  = int64(stats.byteRcvUndecryptTotal)
+	s.ByteRetransTotal = int64(stats.byteRetransTotal)
+	s.ByteSndDropTotal = int64(stats.byteSndDropTotal)
+	s.ByteRcvDropTotal = int64(stats.byteRcvDropTotal)
+	s.ByteRcvUndecryptTotal = int64(stats.byteRcvUndecryptTotal)
 
-	s.PktSent                = int64(stats.pktSent)
-	s.PktRecv                = int64(stats.pktRecv)
-	s.PktSndLoss             = int(stats.pktSndLoss)
-	s.PktRcvLoss             = int(stats.pktRcvLoss)
-	s.PktRetrans             = int(stats.pktRetrans)
-	s.PktRcvRetrans          = int(stats.pktRcvRetrans)
-	s.PktSentACK             = int(stats.pktSentACK)
-	s.PktRecvACK             = int(stats.pktRecvACK)
-	s.PktSentNAK             = int(stats.pktSentNAK)
-	s.PktRecvNAK             = int(stats.pktRecvNAK)
-	s.MbpsSendRate           = float64(stats.mbpsSendRate)
-	s.MbpsRecvRate           = float64(stats.mbpsRecvRate)
-	s.UsSndDuration          = int64(stats.usSndDuration)
-	s.PktReorderDistance     = int(stats.pktReorderDistance)
-	s.PktRcvAvgBelatedTime   = float64(stats.pktRcvAvgBelatedTime)
-	s.PktRcvBelated          = int64(stats.pktRcvBelated)
+	s.PktSent = int64(stats.pktSent)
+	s.PktRecv = int64(stats.pktRecv)
+	s.PktSndLoss = int(stats.pktSndLoss)
+	s.PktRcvLoss = int(stats.pktRcvLoss)
+	s.PktRetrans = int(stats.pktRetrans)
+	s.PktRcvRetrans = int(stats.pktRcvRetrans)
+	s.PktSentACK = int(stats.pktSentACK)
+	s.PktRecvACK = int(stats.pktRecvACK)
+	s.PktSentNAK = int(stats.pktSentNAK)
+	s.PktRecvNAK = int(stats.pktRecvNAK)
+	s.MbpsSendRate = float64(stats.mbpsSendRate)
+	s.MbpsRecvRate = float64(stats.mbpsRecvRate)
+	s.UsSndDuration = int64(stats.usSndDuration)
+	s.PktReorderDistance = int(stats.pktReorderDistance)
+	s.PktRcvAvgBelatedTime = float64(stats.pktRcvAvgBelatedTime)
+	s.PktRcvBelated = int64(stats.pktRcvBelated)
 
-	s.PktSndDrop        = int(stats.pktSndDrop)
-	s.PktRcvDrop        = int(stats.pktRcvDrop)
-	s.PktRcvUndecrypt   = int(stats.pktRcvUndecrypt)
-	s.ByteSent          = int64(stats.byteSent)
-	s.ByteRecv          = int64(stats.byteRecv)
+	s.PktSndDrop = int(stats.pktSndDrop)
+	s.PktRcvDrop = int(stats.pktRcvDrop)
+	s.PktRcvUndecrypt = int(stats.pktRcvUndecrypt)
+	s.ByteSent = int64(stats.byteSent)
+	s.ByteRecv = int64(stats.byteRecv)
 
-	s.ByteRcvLoss       = int64(stats.byteRcvLoss)
-	s.ByteRetrans       = int64(stats.byteRetrans)
-	s.ByteSndDrop       = int64(stats.byteSndDrop)
-	s.ByteRcvDrop       = int64(stats.byteRcvDrop)
-	s.ByteRcvUndecrypt  = int64(stats.byteRcvUndecrypt)
+	s.ByteRcvLoss = int64(stats.byteRcvLoss)
+	s.ByteRetrans = int64(stats.byteRetrans)
+	s.ByteSndDrop = int64(stats.byteSndDrop)
+	s.ByteRcvDrop = int64(stats.byteRcvDrop)
+	s.ByteRcvUndecrypt = int64(stats.byteRcvUndecrypt)
 
-	s.UsPktSndPeriod        = float64(stats.usPktSndPeriod)
-	s.PktFlowWindow         = int(stats.pktFlowWindow)
-	s.PktCongestionWindow   = int(stats.pktCongestionWindow)
-	s.PktFlightSize         = int(stats.pktFlightSize)
-	s.MsRTT                 = float64(stats.msRTT)
-	s.MbpsBandwidth         = float64(stats.mbpsBandwidth)
-	s.ByteAvailSndBuf       = int(stats.byteAvailSndBuf)
-	s.ByteAvailRcvBuf       = int(stats.byteAvailRcvBuf)
+	s.UsPktSndPeriod = float64(stats.usPktSndPeriod)
+	s.PktFlowWindow = int(stats.pktFlowWindow)
+	s.PktCongestionWindow = int(stats.pktCongestionWindow)
+	s.PktFlightSize = int(stats.pktFlightSize)
+	s.MsRTT = float64(stats.msRTT)
+	s.MbpsBandwidth = float64(stats.mbpsBandwidth)
+	s.ByteAvailSndBuf = int(stats.byteAvailSndBuf)
+	s.ByteAvailRcvBuf = int(stats.byteAvailRcvBuf)
 
-	s.MbpsMaxBW   = float64(stats.mbpsMaxBW)
-	s.ByteMSS    = int(stats.byteMSS)
+	s.MbpsMaxBW = float64(stats.mbpsMaxBW)
+	s.ByteMSS = int(stats.byteMSS)
 
-	s.PktSndBuf         = int(stats.pktSndBuf)
-	s.ByteSndBuf        = int(stats.byteSndBuf)
-	s.MsSndBuf          = int(stats.msSndBuf)
-	s.MsSndTsbPdDelay   = int(stats.msSndTsbPdDelay)
+	s.PktSndBuf = int(stats.pktSndBuf)
+	s.ByteSndBuf = int(stats.byteSndBuf)
+	s.MsSndBuf = int(stats.msSndBuf)
+	s.MsSndTsbPdDelay = int(stats.msSndTsbPdDelay)
 
-	s.PktRcvBuf         = int(stats.pktRcvBuf)
-	s.ByteRcvBuf        = int(stats.byteRcvBuf)
-	s.MsRcvBuf          = int(stats.msRcvBuf)
-	s.MsRcvTsbPdDelay   = int(stats.msRcvTsbPdDelay)
+	s.PktRcvBuf = int(stats.pktRcvBuf)
+	s.ByteRcvBuf = int(stats.byteRcvBuf)
+	s.MsRcvBuf = int(stats.msRcvBuf)
+	s.MsRcvTsbPdDelay = int(stats.msRcvTsbPdDelay)
 
-	s.PktSndFilterExtraTotal  = int(stats.pktSndFilterExtraTotal)
-	s.PktRcvFilterExtraTotal  = int(stats.pktRcvFilterExtraTotal)
+	s.PktSndFilterExtraTotal = int(stats.pktSndFilterExtraTotal)
+	s.PktRcvFilterExtraTotal = int(stats.pktRcvFilterExtraTotal)
 	s.PktRcvFilterSupplyTotal = int(stats.pktRcvFilterSupplyTotal)
-	s.PktRcvFilterLossTotal   = int(stats.pktRcvFilterLossTotal)
+	s.PktRcvFilterLossTotal = int(stats.pktRcvFilterLossTotal)
 
-	s.PktSndFilterExtra     = int(stats.pktSndFilterExtra)
-	s.PktRcvFilterExtra     = int(stats.pktRcvFilterExtra)
-	s.PktRcvFilterSupply    = int(stats.pktRcvFilterSupply)
-	s.PktRcvFilterLoss      = int(stats.pktRcvFilterLoss)
-	s.PktReorderTolerance   = int(stats.pktReorderTolerance)
+	s.PktSndFilterExtra = int(stats.pktSndFilterExtra)
+	s.PktRcvFilterExtra = int(stats.pktRcvFilterExtra)
+	s.PktRcvFilterSupply = int(stats.pktRcvFilterSupply)
+	s.PktRcvFilterLoss = int(stats.pktRcvFilterLoss)
+	s.PktReorderTolerance = int(stats.pktReorderTolerance)
 
 	return s
 }

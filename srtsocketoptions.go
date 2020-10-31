@@ -23,37 +23,37 @@ const (
 	tBoolean   = 3
 	tTransType = 4
 
-	SRTO_TRANSTYPE = C.SRTO_TRANSTYPE
-	SRTO_MAXBW = C.SRTO_MAXBW
-	SRTO_PBKEYLEN = C.SRTO_PBKEYLEN
-	SRTO_PASSPHRASE = C.SRTO_PASSPHRASE
-	SRTO_MSS = C.SRTO_MSS
-	SRTO_FC = C.SRTO_FC
-	SRTO_SNDBUF = C.SRTO_SNDBUF
-	SRTO_RCVBUF = C.SRTO_RCVBUF
-	SRTO_IPTTL = C.SRTO_IPTTL
-	SRTO_IPTOS = C.SRTO_IPTOS
-	SRTO_INPUTBW = C.SRTO_INPUTBW
-	SRTO_OHEADBW = C.SRTO_OHEADBW
-	SRTO_LATENCY = C.SRTO_LATENCY
-	SRTO_TSBPDMODE = C.SRTO_TSBPDMODE
-	SRTO_TLPKTDROP = C.SRTO_TLPKTDROP
-	SRTO_SNDDROPDELAY = C.SRTO_SNDDROPDELAY
-	SRTO_NAKREPORT = C.SRTO_NAKREPORT
-	SRTO_CONNTIMEO = C.SRTO_CONNTIMEO
-	SRTO_LOSSMAXTTL = C.SRTO_LOSSMAXTTL
-	SRTO_RCVLATENCY = C.SRTO_RCVLATENCY
-	SRTO_PEERLATENCY = C.SRTO_PEERLATENCY
-	SRTO_MINVERSION = C.SRTO_MINVERSION
-	SRTO_STREAMID = C.SRTO_STREAMID
-	SRTO_CONGESTION = C.SRTO_CONGESTION
-	SRTO_MESSAGEAPI = C.SRTO_MESSAGEAPI
-	SRTO_PAYLOADSIZE = C.SRTO_PAYLOADSIZE
-	SRTO_KMREFRESHRATE = C.SRTO_KMREFRESHRATE
-	SRTO_KMPREANNOUNCE = C.SRTO_KMPREANNOUNCE
+	SRTO_TRANSTYPE          = C.SRTO_TRANSTYPE
+	SRTO_MAXBW              = C.SRTO_MAXBW
+	SRTO_PBKEYLEN           = C.SRTO_PBKEYLEN
+	SRTO_PASSPHRASE         = C.SRTO_PASSPHRASE
+	SRTO_MSS                = C.SRTO_MSS
+	SRTO_FC                 = C.SRTO_FC
+	SRTO_SNDBUF             = C.SRTO_SNDBUF
+	SRTO_RCVBUF             = C.SRTO_RCVBUF
+	SRTO_IPTTL              = C.SRTO_IPTTL
+	SRTO_IPTOS              = C.SRTO_IPTOS
+	SRTO_INPUTBW            = C.SRTO_INPUTBW
+	SRTO_OHEADBW            = C.SRTO_OHEADBW
+	SRTO_LATENCY            = C.SRTO_LATENCY
+	SRTO_TSBPDMODE          = C.SRTO_TSBPDMODE
+	SRTO_TLPKTDROP          = C.SRTO_TLPKTDROP
+	SRTO_SNDDROPDELAY       = C.SRTO_SNDDROPDELAY
+	SRTO_NAKREPORT          = C.SRTO_NAKREPORT
+	SRTO_CONNTIMEO          = C.SRTO_CONNTIMEO
+	SRTO_LOSSMAXTTL         = C.SRTO_LOSSMAXTTL
+	SRTO_RCVLATENCY         = C.SRTO_RCVLATENCY
+	SRTO_PEERLATENCY        = C.SRTO_PEERLATENCY
+	SRTO_MINVERSION         = C.SRTO_MINVERSION
+	SRTO_STREAMID           = C.SRTO_STREAMID
+	SRTO_CONGESTION         = C.SRTO_CONGESTION
+	SRTO_MESSAGEAPI         = C.SRTO_MESSAGEAPI
+	SRTO_PAYLOADSIZE        = C.SRTO_PAYLOADSIZE
+	SRTO_KMREFRESHRATE      = C.SRTO_KMREFRESHRATE
+	SRTO_KMPREANNOUNCE      = C.SRTO_KMPREANNOUNCE
 	SRTO_ENFORCEDENCRYPTION = C.SRTO_ENFORCEDENCRYPTION
-	SRTO_PEERIDLETIMEO = C.SRTO_PEERIDLETIMEO
-	SRTO_PACKETFILTER = C.SRTO_PACKETFILTER
+	SRTO_PEERIDLETIMEO      = C.SRTO_PEERIDLETIMEO
+	SRTO_PACKETFILTER       = C.SRTO_PACKETFILTER
 )
 
 type socketOption struct {
@@ -122,7 +122,7 @@ func setSocketOptions(s C.int, binding int, options map[string]string) error {
 					if err == nil {
 						result := C.srt_setsockflag(s, C.SRT_SOCKOPT(so.option), unsafe.Pointer(&v32), C.int32_t(unsafe.Sizeof(v32)))
 						if result == -1 {
-							log.Printf("Warning - Error setting option %s to %s", so.name, val)
+							log.Printf("Warning - Error setting option %s to %s, %v", so.name, val, C.GoString(C.srt_getlasterror_str()))
 						}
 					}
 				} else if so.dataType == tInteger64 {
@@ -130,7 +130,7 @@ func setSocketOptions(s C.int, binding int, options map[string]string) error {
 					if err == nil {
 						result := C.srt_setsockflag(s, C.SRT_SOCKOPT(so.option), unsafe.Pointer(&v), C.int32_t(unsafe.Sizeof(v)))
 						if result == -1 {
-							log.Printf("Warning - Error setting option %s to %s", so.name, val)
+							log.Printf("Warning - Error setting option %s to %s, %v", so.name, val, C.GoString(C.srt_getlasterror_str()))
 						}
 					}
 				} else if so.dataType == tString {
@@ -138,7 +138,7 @@ func setSocketOptions(s C.int, binding int, options map[string]string) error {
 					defer C.free(unsafe.Pointer(sval))
 					result := C.srt_setsockflag(s, C.SRT_SOCKOPT(so.option), unsafe.Pointer(sval), C.int32_t(len(val)))
 					if result == -1 {
-						log.Printf("Warning - Error setting option %s to %s", so.name, val)
+						log.Printf("Warning - Error setting option %s to %s, %v", so.name, val, C.GoString(C.srt_getlasterror_str()))
 					}
 
 				} else if so.dataType == tBoolean {
@@ -151,7 +151,7 @@ func setSocketOptions(s C.int, binding int, options map[string]string) error {
 						result = C.srt_setsockflag(s, C.SRT_SOCKOPT(so.option), unsafe.Pointer(&v), C.int32_t(unsafe.Sizeof(v)))
 					}
 					if result == -1 {
-						log.Printf("Warning - Error setting option %s to %s", so.name, val)
+						log.Printf("Warning - Error setting option %s to %s, %v", so.name, val, C.GoString(C.srt_getlasterror_str()))
 					}
 				} else if so.dataType == tTransType {
 					var result C.int
