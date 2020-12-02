@@ -1,4 +1,4 @@
-[![GoDoc](https://godoc.org/github.com/Haivision/srtgo?status.svg)](https://godoc.org/github.com/Haivision/srtgo)
+[![PkgGoDev](https://pkg.go.dev/badge/github.com/haivision/srtgo)](https://pkg.go.dev/github.com/haivision/srtgo)
 
 # srtgo
 
