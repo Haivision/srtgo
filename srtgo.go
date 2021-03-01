@@ -50,6 +50,7 @@ var (
 	SRT_INVALID_SOCK = C.get_srt_invalid_sock()
 	SRT_ERROR        = C.get_srt_error()
 	SRT_REJX_FORBIDDEN = C.get_srt_error_access_forbidden()
+	SRTS_CONNECTED = C.SRTS_CONNECTED
 )
 
 const defaultPacketSize = 1456
