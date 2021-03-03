@@ -32,11 +32,6 @@ const (
 	bindingPost = 1
 )
 
-type SrtStreamInfo struct {
-	Session    string
-	Resource   string
-	Mode       string
-}
 
 // SrtSocket - SRT socket
 type SrtSocket struct {
@@ -49,7 +44,6 @@ type SrtSocket struct {
 	options      map[string]string
 	mode         int
 	pktSize      int
-	StreamInfo   SrtStreamInfo
 }
 
 // Static consts from library
