@@ -3,8 +3,10 @@ package srtgo
 /*
 #cgo LDFLAGS: -lsrt
 #include <srt/srt.h>
+#include <srt/access_control.h>
 static const SRTSOCKET get_srt_invalid_sock() { return SRT_INVALID_SOCK; };
 static const int get_srt_error() { return SRT_ERROR; };
+static const int get_srt_error_access_forbidden() { return SRT_REJX_FORBIDDEN; };
 */
 import "C"
 
@@ -30,6 +32,7 @@ const (
 	bindingPost = 1
 )
 
+
 // SrtSocket - SRT socket
 type SrtSocket struct {
 	socket       C.int
@@ -47,6 +50,8 @@ type SrtSocket struct {
 var (
 	SRT_INVALID_SOCK = C.get_srt_invalid_sock()
 	SRT_ERROR        = C.get_srt_error()
+	SRT_REJX_FORBIDDEN = C.get_srt_error_access_forbidden()
+	SRTS_CONNECTED = C.SRTS_CONNECTED
 )
 
 const defaultPacketSize = 1456
@@ -133,6 +138,10 @@ func newFromSocket(acceptSocket *SrtSocket, socket C.SRTSOCKET) (*SrtSocket, err
 	}
 
 	return s, nil
+}
+
+func (s SrtSocket)GetSocket() C.int {
+	return s.socket
 }
 
 // Listen for incoming connections
