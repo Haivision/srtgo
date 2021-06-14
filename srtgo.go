@@ -13,6 +13,7 @@ import "C"
 import (
 	"fmt"
 	"net"
+	"runtime"
 	"strconv"
 	"syscall"
 	"unsafe"
@@ -32,7 +33,6 @@ const (
 	bindingPost = 1
 )
 
-
 // SrtSocket - SRT socket
 type SrtSocket struct {
 	socket       C.int
@@ -48,10 +48,10 @@ type SrtSocket struct {
 
 // Static consts from library
 var (
-	SRT_INVALID_SOCK = C.get_srt_invalid_sock()
-	SRT_ERROR        = C.get_srt_error()
+	SRT_INVALID_SOCK   = C.get_srt_invalid_sock()
+	SRT_ERROR          = C.get_srt_error()
 	SRT_REJX_FORBIDDEN = C.get_srt_error_access_forbidden()
-	SRTS_CONNECTED = C.SRTS_CONNECTED
+	SRTS_CONNECTED     = C.SRTS_CONNECTED
 )
 
 const defaultPacketSize = 1456
@@ -140,7 +140,7 @@ func newFromSocket(acceptSocket *SrtSocket, socket C.SRTSOCKET) (*SrtSocket, err
 	return s, nil
 }
 
-func (s SrtSocket)GetSocket() C.int {
+func (s SrtSocket) GetSocket() C.int {
 	return s.socket
 }
 
@@ -212,11 +212,29 @@ func (s SrtSocket) Connect() error {
 		return err
 	}
 
+	runtime.LockOSThread()
 	res := C.srt_connect(s.socket, sa, C.int(salen))
 	if res == SRT_ERROR {
 		C.srt_close(s.socket)
+		srt_errno := C.srt_getlasterror(nil)
+		runtime.UnlockOSThread()
+		switch srt_errno {
+		case C.SRT_EINVSOCK:
+			return &SrtInvalidSock{}
+		case C.SRT_ERDVUNBOUND:
+			return &SrtRendezvousUnbound{}
+		case C.SRT_ECONNSOCK:
+			return &SrtSockConnected{}
+		case C.SRT_ECONNREJ:
+			return &SrtConnectionRejected{}
+		case C.SRT_ENOSERVER:
+			return &SrtConnectTimeout{}
+		case C.SRT_ESCLOSED:
+			return &SrtSocketClosed{}
+		}
 		return fmt.Errorf("Error in srt_connect")
 	}
+	runtime.UnlockOSThread()
 
 	if !s.blocking {
 		// Socket readiness for connection is checked by polling on WRITE allowed sockets.
