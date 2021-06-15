@@ -48,7 +48,6 @@ func SrtSetLogLevel(level SrtLogLevel) {
 func SrtSetLogHandler(cb LogCallBackFunc) {
 	ptr := gopointer.Save(cb)
 	C.srt_setloghandler(ptr, (*C.SRT_LOG_HANDLER_FN)(C.srtLogCB))
-	logCBPtrLock.Lock()
 	storeLogCBPtr(ptr)
 }
 
@@ -63,5 +62,5 @@ func storeLogCBPtr(ptr unsafe.Pointer) {
 	if logCBPtr != nil {
 		gopointer.Unref(logCBPtr)
 	}
-	logCBPtr = nil
+	logCBPtr = ptr
 }
