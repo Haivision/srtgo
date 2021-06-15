@@ -156,13 +156,13 @@ func (s SrtSocket) Listen(clients int) error {
 	res := C.srt_bind(s.socket, sa, C.int(salen))
 	if res == SRT_ERROR {
 		C.srt_close(s.socket)
-		return fmt.Errorf("Error in srt_bind")
+		return fmt.Errorf("Error in srt_bind: %v", C.GoString(C.srt_getlasterror_str()))
 	}
 
 	res = C.srt_listen(s.socket, nclients)
 	if res == SRT_ERROR {
 		C.srt_close(s.socket)
-		return fmt.Errorf("Error in srt_listen")
+		return fmt.Errorf("Error in srt_listen: %v", C.GoString(C.srt_getlasterror_str()))
 	}
 
 	err = s.postconfiguration(&s)
