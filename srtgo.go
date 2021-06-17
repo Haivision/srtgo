@@ -7,16 +7,22 @@ package srtgo
 static const SRTSOCKET get_srt_invalid_sock() { return SRT_INVALID_SOCK; };
 static const int get_srt_error() { return SRT_ERROR; };
 static const int get_srt_error_access_forbidden() { return SRT_REJX_FORBIDDEN; };
+static const int get_srt_error_reject_predefined() { return SRT_REJC_PREDEFINED; };
+extern int srtListenCB(void* opaque, SRTSOCKET ns, int hs_version, const struct sockaddr* peeraddr, const char* streamid);
 */
 import "C"
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"runtime"
 	"strconv"
+	"sync"
 	"syscall"
 	"unsafe"
+
+	gopointer "github.com/mattn/go-pointer"
 )
 
 // SRT Socket mode
@@ -46,12 +52,18 @@ type SrtSocket struct {
 	pktSize      int
 }
 
+var (
+	listenCallbackMutex sync.Mutex
+	listenCallbackMap   map[C.int]unsafe.Pointer = make(map[C.int]unsafe.Pointer)
+)
+
 // Static consts from library
 var (
-	SRT_INVALID_SOCK   = C.get_srt_invalid_sock()
-	SRT_ERROR          = C.get_srt_error()
-	SRT_REJX_FORBIDDEN = C.get_srt_error_access_forbidden()
-	SRTS_CONNECTED     = C.SRTS_CONNECTED
+	SRT_INVALID_SOCK    = C.get_srt_invalid_sock()
+	SRT_ERROR           = C.get_srt_error()
+	SRT_REJX_FORBIDDEN  = C.get_srt_error_access_forbidden()
+	SRT_REJC_PREDEFINED = C.get_srt_error_reject_predefined()
+	SRTS_CONNECTED      = C.SRTS_CONNECTED
 )
 
 const defaultPacketSize = 1456
@@ -338,6 +350,50 @@ func (s SrtSocket) Close() {
 		}
 	}
 	C.srt_close(s.socket)
+	listenCallbackMutex.Lock()
+	if ptr, exists := listenCallbackMap[s.socket]; exists {
+		gopointer.Unref(ptr)
+	}
+	listenCallbackMutex.Unlock()
+}
+
+type ListenCallbackFunc func(socket *SrtSocket, version int, addr *net.UDPAddr, streamid string) bool
+
+//export srtListenCBWrapper
+func srtListenCBWrapper(arg unsafe.Pointer, socket C.int, hsVersion C.int, peeraddr *C.struct_sockaddr, streamid *C.char) C.int {
+	userCB := gopointer.Restore(arg).(ListenCallbackFunc)
+
+	s := new(SrtSocket)
+	s.socket = socket
+	udpAddr, _ := udpAddrFromSockaddr((*syscall.RawSockaddrAny)(unsafe.Pointer(peeraddr)))
+
+	if userCB(s, int(hsVersion), udpAddr, C.GoString(streamid)) {
+		return 0
+	}
+	return SRT_ERROR
+}
+
+// SetListenCallback - set a function to be called before a socket is handed to accept on a listener socket.
+// The connection can be rejected by returning false from the callback.
+func (s SrtSocket) SetListenCallback(cb ListenCallbackFunc) {
+	ptr := gopointer.Save(cb)
+	C.srt_listen_callback(s.socket, (*C.srt_listen_callback_fn)(C.srtListenCB), ptr)
+
+	listenCallbackMutex.Lock()
+	defer listenCallbackMutex.Unlock()
+	if listenCallbackMap[s.socket] != nil {
+		gopointer.Unref(listenCallbackMap[s.socket])
+	}
+	listenCallbackMap[s.socket] = ptr
+}
+
+// SetRejectReason - set custom reason for connection reject
+func (s SrtSocket) SetRejectReason(value int) error {
+	res := C.srt_setrejectreason(s.socket, C.int(value))
+	if res == SRT_ERROR {
+		return errors.New(C.GoString(C.srt_getlasterror_str()))
+	}
+	return nil
 }
 
 // GetSockOptByte - return byte value obtained with srt_getsockopt
