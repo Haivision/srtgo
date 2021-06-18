@@ -102,13 +102,13 @@ func TestSetSockOptInt(t *testing.T) {
 	options := make(map[string]string)
 	a := NewSrtSocket("localhost", 8090, options)
 
-	err := a.SetSockOptInt(16, 20000)
+	err := a.SetSockOptInt(SRTO_LATENCY, 200)
 	if err != nil {
 		t.Error("Error on TestSetSockOpt")
 	}
 
-	v, err := a.GetSockOptInt(16)
-	if v != 20000 {
+	v, err := a.GetSockOptInt(SRTO_LATENCY)
+	if v != 200 {
 		t.Error("Error in SetSockOptInt/GetSockOptInt", v)
 	}
 }
@@ -118,12 +118,12 @@ func TestSetSockOptString(t *testing.T) {
 	options := make(map[string]string)
 	a := NewSrtSocket("localhost", 8090, options)
 
-	err := a.SetSockOptString(46, "123")
+	err := a.SetSockOptString(SRTO_STREAMID, "123")
 	if err != nil {
 		t.Error("Error on TestSetSockOpt")
 	}
 
-	v, err := a.GetSockOptString(46)
+	v, err := a.GetSockOptString(SRTO_STREAMID)
 	if v != "123" {
 		t.Error("Error in SetSockOptString/GetSockOptString", v)
 	}
@@ -134,12 +134,12 @@ func TestSetSockOptBool(t *testing.T) {
 	options := make(map[string]string)
 	a := NewSrtSocket("localhost", 8090, options)
 
-	err := a.SetSockOptBool(48, true)
+	err := a.SetSockOptBool(SRTO_MESSAGEAPI, true)
 	if err != nil {
 		t.Error("Error on TestSetSockOpt")
 	}
 
-	v, err := a.GetSockOptBool(48)
+	v, err := a.GetSockOptBool(SRTO_MESSAGEAPI)
 	if v != true {
 		t.Error("Error in SetSockOptBool/GetSockOptBool", v)
 	}

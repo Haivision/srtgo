@@ -11,8 +11,8 @@ func TestCreateAddrInetV4(t *testing.T) {
 		t.Error("Error on CreateAddrInet")
 	}
 
-	if size != 16 || ip1.sa_len != 16 {
-		t.Error("Ip Address size does not match", size, ip1.sa_len)
+	if size != 16 {
+		t.Error("Ip Address size does not match", size)
 	}
 
 	if ip1.sa_family != 2 {
@@ -39,8 +39,8 @@ func TestCreateAddrInetV6(t *testing.T) {
 		t.Error("Error on CreateAddrInet")
 	}
 
-	if size != 28 || ip1.sa_len != 28 {
-		t.Error("Ipv6 Address size does not match", size, ip1.sa_len)
+	if size != 28 {
+		t.Error("Ipv6 Address size does not match", size)
 	}
 
 	if ip1.sa_family != 30 {
