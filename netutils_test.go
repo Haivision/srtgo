@@ -2,6 +2,8 @@ package srtgo
 
 import (
 	"testing"
+
+	"golang.org/x/sys/unix"
 )
 
 func TestCreateAddrInetV4(t *testing.T) {
@@ -15,7 +17,7 @@ func TestCreateAddrInetV4(t *testing.T) {
 		t.Error("Ip Address size does not match", size)
 	}
 
-	if ip1.sa_family != 2 {
+	if ip1.sa_family != unix.AF_INET {
 		t.Error("Ip Address family does not match")
 	}
 
@@ -43,7 +45,7 @@ func TestCreateAddrInetV6(t *testing.T) {
 		t.Error("Ipv6 Address size does not match", size)
 	}
 
-	if ip1.sa_family != 30 {
+	if ip1.sa_family != unix.AF_INET6 {
 		t.Error("Ipv6 Address family does not match")
 	}
 	data := []int{31, -102, 0, 0, 0, 0, 32, 1, 13, -72, -123, -93, 0, 0}
