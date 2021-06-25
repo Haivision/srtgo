@@ -155,9 +155,11 @@ func (s SrtSocket) GetSocket() C.int {
 	return s.socket
 }
 
-// Listen for incoming connections
-func (s SrtSocket) Listen(clients int) error {
-	nclients := C.int(clients)
+// Listen for incoming connections. The backlog setting defines how many sockets
+// may be allowed to wait until they are accepted (excessive connection requests
+// are rejected in advance)
+func (s SrtSocket) Listen(backlog int) error {
+	nbacklog := C.int(backlog)
 
 	sa, salen, err := CreateAddrInet(s.host, s.port)
 	if err != nil {
@@ -170,7 +172,7 @@ func (s SrtSocket) Listen(clients int) error {
 		return fmt.Errorf("Error in srt_bind: %v", C.GoString(C.srt_getlasterror_str()))
 	}
 
-	res = C.srt_listen(s.socket, nclients)
+	res = C.srt_listen(s.socket, nbacklog)
 	if res == SRT_ERROR {
 		C.srt_close(s.socket)
 		return fmt.Errorf("Error in srt_listen: %v", C.GoString(C.srt_getlasterror_str()))
