@@ -99,43 +99,54 @@ func TestListen(t *testing.T) {
 	}
 }
 
-func AcceptHelper(options map[string]string, t *testing.T) {
+func AcceptHelper(numSockets int, options map[string]string, t *testing.T) {
 	listening := make(chan struct{})
-	a := NewSrtSocket("localhost", 8090, options)
-	b := NewSrtSocket("localhost", 8090, options)
+	listener := NewSrtSocket("localhost", 8090, options)
+	var connectors []*SrtSocket
+	for i := 0; i < numSockets; i++ {
+		connectors = append(connectors, NewSrtSocket("localhost", 8090, options))
+	}
 	wg := sync.WaitGroup{}
 	timer := time.AfterFunc(time.Second, func() {
 		t.Log("Accept timed out")
-		a.Close()
-		b.Close()
+		listener.Close()
+		for _, s := range connectors {
+			s.Close()
+		}
 	})
 	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		<-listening
-		err := b.Connect()
-		if err != nil {
-			t.Error(err)
+		for _, s := range connectors {
+			err := s.Connect()
+			if err != nil {
+				t.Error(err)
+			}
 		}
-		wg.Done()
 	}()
 
-	err := a.Listen(1)
+	err := listener.Listen(numSockets)
 	if err != nil {
 		t.Error(err)
 	}
 	listening <- struct{}{}
-	sock, addr, err := a.Accept()
-	if err != nil {
-		t.Error(err)
-	}
-	if sock == nil || addr == nil {
-		t.Error("Expected non-nil addr and sock")
+	for i := 0; i < numSockets; i++ {
+		sock, addr, err := listener.Accept()
+		if err != nil {
+			t.Error(err)
+		}
+		if sock == nil || addr == nil {
+			t.Error("Expected non-nil addr and sock")
+		}
 	}
 
 	wg.Wait()
 	if timer.Stop() {
-		a.Close()
-		b.Close()
+		listener.Close()
+		for _, s := range connectors {
+			s.Close()
+		}
 	}
 }
 
@@ -144,7 +155,7 @@ func TestAcceptNonBlocking(t *testing.T) {
 
 	options := make(map[string]string)
 	options["transtype"] = "file"
-	AcceptHelper(options, t)
+	AcceptHelper(1, options, t)
 }
 
 func TestAcceptBlocking(t *testing.T) {
@@ -153,7 +164,24 @@ func TestAcceptBlocking(t *testing.T) {
 	options := make(map[string]string)
 	options["blocking"] = "1"
 	options["transtype"] = "file"
-	AcceptHelper(options, t)
+	AcceptHelper(1, options, t)
+}
+
+func TestMultipleAcceptNonBlocking(t *testing.T) {
+	InitSRT()
+
+	options := make(map[string]string)
+	options["transtype"] = "file"
+	AcceptHelper(3, options, t)
+}
+
+func TestMultipleAcceptBlocking(t *testing.T) {
+	InitSRT()
+
+	options := make(map[string]string)
+	options["blocking"] = "1"
+	options["transtype"] = "file"
+	AcceptHelper(3, options, t)
 }
 
 func TestSetSockOptInt(t *testing.T) {
