@@ -101,14 +101,17 @@ func NewSrtSocket(host string, port uint16, options map[string]string) *SrtSocke
 		s.pktSize = defaultPacketSize
 	}
 
-	val, s.blocking = options["blocking"]
-	if !s.blocking || val == "0" {
+	val, exists = options["blocking"]
+	if exists && val != "0" {
+		s.blocking = true
+	}
+	if !s.blocking {
 		s.epollConnect = C.srt_epoll_create()
 		if s.epollConnect < 0 {
 			return nil
 		}
 		var modes C.int
-		modes = C.SRT_EPOLL_OUT | C.SRT_EPOLL_ERR
+		modes = C.SRT_EPOLL_IN | C.SRT_EPOLL_OUT | C.SRT_EPOLL_ERR
 		if C.srt_epoll_add_usock(s.epollConnect, s.socket, &modes) == SRT_ERROR {
 			return nil
 		}
@@ -155,9 +158,11 @@ func (s SrtSocket) GetSocket() C.int {
 	return s.socket
 }
 
-// Listen for incoming connections
-func (s SrtSocket) Listen(clients int) error {
-	nclients := C.int(clients)
+// Listen for incoming connections. The backlog setting defines how many sockets
+// may be allowed to wait until they are accepted (excessive connection requests
+// are rejected in advance)
+func (s SrtSocket) Listen(backlog int) error {
+	nbacklog := C.int(backlog)
 
 	sa, salen, err := CreateAddrInet(s.host, s.port)
 	if err != nil {
@@ -170,7 +175,7 @@ func (s SrtSocket) Listen(clients int) error {
 		return fmt.Errorf("Error in srt_bind: %v", C.GoString(C.srt_getlasterror_str()))
 	}
 
-	res = C.srt_listen(s.socket, nclients)
+	res = C.srt_listen(s.socket, nbacklog)
 	if res == SRT_ERROR {
 		C.srt_close(s.socket)
 		return fmt.Errorf("Error in srt_listen: %v", C.GoString(C.srt_getlasterror_str()))
@@ -191,7 +196,7 @@ func (s SrtSocket) Accept() (*SrtSocket, *net.UDPAddr, error) {
 		len := C.int(2)
 		timeoutMs := C.int64_t(-1)
 		ready := [2]C.int{SRT_INVALID_SOCK, SRT_INVALID_SOCK}
-		if C.srt_epoll_wait(s.epollConnect, nil, nil, &ready[0], &len, timeoutMs, nil, nil, nil, nil) == -1 {
+		if C.srt_epoll_wait(s.epollConnect, &ready[0], &len, nil, nil, timeoutMs, nil, nil, nil, nil) == -1 {
 			return nil, nil, fmt.Errorf("srt accept, epoll error: %s", C.GoString(C.srt_getlasterror_str()))
 		}
 	}
@@ -512,7 +517,7 @@ func (s SrtSocket) SetSockOptString(opt int, value string) error {
 func (s SrtSocket) setSockOpt(opt int, data unsafe.Pointer, size int) error {
 	res := C.srt_setsockopt(s.socket, 0, C.SRT_SOCKOPT(opt), data, C.int(size))
 	if res == -1 {
-		fmt.Errorf("Error calling srt_setsockopt")
+		return fmt.Errorf("Error calling srt_setsockopt")
 	}
 
 	return nil
@@ -521,7 +526,7 @@ func (s SrtSocket) setSockOpt(opt int, data unsafe.Pointer, size int) error {
 func (s SrtSocket) getSockOpt(opt int, data unsafe.Pointer, size *int) error {
 	res := C.srt_getsockopt(s.socket, 0, C.SRT_SOCKOPT(opt), data, (*C.int)(unsafe.Pointer(size)))
 	if res == -1 {
-		fmt.Errorf("Error calling srt_getsockopt")
+		return fmt.Errorf("Error calling srt_getsockopt")
 	}
 
 	return nil
@@ -536,7 +541,7 @@ func (s SrtSocket) preconfiguration() (int, error) {
 	}
 	result := C.srt_setsockopt(s.socket, 0, C.SRTO_RCVSYN, unsafe.Pointer(&blocking), C.int(unsafe.Sizeof(blocking)))
 	if result == -1 {
-		return ModeFailure, fmt.Errorf("Could not set SRTO_RCVSYN flag")
+		return ModeFailure, fmt.Errorf("could not set SRTO_RCVSYN flag")
 	}
 
 	var mode int
@@ -569,7 +574,7 @@ func (s SrtSocket) preconfiguration() (int, error) {
 		if err == nil {
 			setSocketLingerOption(s.socket, int32(li))
 		} else {
-			return ModeFailure, fmt.Errorf("Could not set LINGER option")
+			return ModeFailure, fmt.Errorf("could not set LINGER option")
 		}
 	}
 
@@ -591,12 +596,12 @@ func (s SrtSocket) postconfiguration(sck *SrtSocket) error {
 
 	res := C.srt_setsockopt(sck.socket, 0, C.SRTO_SNDSYN, unsafe.Pointer(&blocking), C.int(unsafe.Sizeof(blocking)))
 	if res == -1 {
-		fmt.Errorf("Error in postconfiguration setting SRTO_SNDSYN")
+		return fmt.Errorf("Error in postconfiguration setting SRTO_SNDSYN")
 	}
 
 	res = C.srt_setsockopt(sck.socket, 0, C.SRTO_RCVSYN, unsafe.Pointer(&blocking), C.int(unsafe.Sizeof(blocking)))
 	if res == -1 {
-		fmt.Errorf("Error in postconfiguration setting SRTO_RCVSYN")
+		return fmt.Errorf("Error in postconfiguration setting SRTO_RCVSYN")
 	}
 
 	err := setSocketOptions(sck.socket, bindingPost, s.options)
