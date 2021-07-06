@@ -34,12 +34,12 @@ func listenCallback(socket *srtgo.SrtSocket, version int, addr *net.UDPAddr, str
 func handler(socket *srtgo.SrtSocket, addr *net.UDPAddr) {
 	buf := make([]byte, 1500)
 	for {
-		len, err := socket.Read(buf, 1)
+		len, err := socket.Read(buf)
 		if err != nil {
 			log.Println(err)
 			return
 		}
-		_, err = socket.Write(buf[:len], 1)
+		_, err = socket.Write(buf[:len])
 		if err != nil {
 			log.Println(err)
 			return

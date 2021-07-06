@@ -51,6 +51,7 @@ type SrtSocket struct {
 	options      map[string]string
 	mode         int
 	pktSize      int
+	pollTimeout  int64
 }
 
 var (
@@ -89,6 +90,7 @@ func NewSrtSocket(host string, port uint16, options map[string]string) *SrtSocke
 	s.host = host
 	s.port = port
 	s.options = options
+	s.pollTimeout = -1
 
 	val, exists := options["pktsize"]
 	if exists {
@@ -194,7 +196,7 @@ func (s SrtSocket) Accept() (*SrtSocket, *net.UDPAddr, error) {
 	if !s.blocking {
 		// Socket readiness for connection is checked by polling on WRITE allowed sockets.
 		len := C.int(2)
-		timeoutMs := C.int64_t(-1)
+		timeoutMs := C.int64_t(s.pollTimeout)
 		ready := [2]C.int{SRT_INVALID_SOCK, SRT_INVALID_SOCK}
 		if C.srt_epoll_wait(s.epollConnect, &ready[0], &len, nil, nil, timeoutMs, nil, nil, nil, nil) == -1 {
 			return nil, nil, fmt.Errorf("srt accept, epoll error: %s", C.GoString(C.srt_getlasterror_str()))
@@ -255,7 +257,7 @@ func (s SrtSocket) Connect() error {
 	if !s.blocking {
 		// Socket readiness for connection is checked by polling on WRITE allowed sockets.
 		len := C.int(2)
-		timeoutMs := C.int64_t(-1)
+		timeoutMs := C.int64_t(s.pollTimeout)
 		ready := [2]C.int{SRT_INVALID_SOCK, SRT_INVALID_SOCK}
 		if C.srt_epoll_wait(s.epollConnect, nil, nil, &ready[0], &len, timeoutMs, nil, nil, nil, nil) != -1 {
 			state := C.srt_getsockstate(s.socket)
@@ -276,17 +278,17 @@ func (s SrtSocket) Connect() error {
 }
 
 // Read data from the SRT socket
-func (s SrtSocket) Read(b []byte, timeout int) (n int, err error) {
+func (s SrtSocket) Read(b []byte) (n int, err error) {
 	if !s.blocking {
 		len := C.int(2)
-		timeoutMs := C.int64_t(timeout)
+		timeoutMs := C.int64_t(s.pollTimeout)
 		ready := [2]C.int{SRT_INVALID_SOCK, SRT_INVALID_SOCK}
 
 		if C.srt_epoll_wait(s.epollIo, &ready[0], &len, nil, nil, timeoutMs, nil, nil, nil, nil) == SRT_ERROR {
 			if C.srt_getlasterror(nil) == C.SRT_ETIMEOUT {
 				return 0, nil
 			}
-			return 0, fmt.Errorf("error in read:epoll")
+			return 0, fmt.Errorf("error in read:epoll %s", C.GoString(C.srt_getlasterror_str()))
 		}
 	}
 
@@ -299,22 +301,22 @@ func (s SrtSocket) Read(b []byte, timeout int) (n int, err error) {
 }
 
 // Write data to the SRT socket
-func (s SrtSocket) Write(b []byte, timeout int) (n int, err error) {
+func (s SrtSocket) Write(b []byte) (n int, err error) {
 	if !s.blocking {
-		timeoutMs := C.int64_t(timeout)
+		timeoutMs := C.int64_t(s.pollTimeout)
 		len := C.int(2)
 		ready := [2]C.int{SRT_INVALID_SOCK, SRT_INVALID_SOCK}
 		rlen := C.int(2)
 		rready := [2]C.int{SRT_INVALID_SOCK, SRT_INVALID_SOCK}
 
 		if C.srt_epoll_wait(s.epollIo, &rready[0], &rlen, &ready[0], &len, timeoutMs, nil, nil, nil, nil) == SRT_ERROR {
-			return 0, fmt.Errorf("error in read:epoll")
+			return 0, fmt.Errorf("error in write:epoll %s", C.GoString(C.srt_getlasterror_str()))
 		}
 	}
 
 	res := C.srt_sendmsg2(s.socket, (*C.char)(unsafe.Pointer(&b[0])), C.int(len(b)), nil)
 	if res == SRT_ERROR {
-		return 0, fmt.Errorf("error in read:srt_sendmsg2")
+		return 0, fmt.Errorf("error in write:srt_sendmsg2 %s", C.GoString(C.srt_getlasterror_str()))
 	}
 
 	return int(res), nil
@@ -325,7 +327,7 @@ func (s SrtSocket) Stats() (*SrtStats, error) {
 	var stats C.SRT_TRACEBSTATS = C.SRT_TRACEBSTATS{}
 	var b C.int = 1
 	if C.srt_bstats(s.socket, &stats, b) == SRT_ERROR {
-		return nil, fmt.Errorf("Error getting stats")
+		return nil, fmt.Errorf("Error getting stats, %s", C.GoString(C.srt_getlasterror_str()))
 	}
 
 	return newSrtStats(&stats), nil
@@ -339,6 +341,18 @@ func (s SrtSocket) Mode() int {
 // PacketSize - Return packet size of the SRT socket
 func (s SrtSocket) PacketSize() int {
 	return s.pktSize
+}
+
+// PollTimeout - Return polling max time, in milliseconds, for connect/read/write operations.
+// Only applied when socket is in non-blocking mode.
+func (s SrtSocket) PollTimeout() int64 {
+	return s.pollTimeout
+}
+
+// SetPollTimeout - Sets polling max time, in milliseconds, for connect/read/write operations.
+// Only applied when socket is in non-blocking mode.
+func (s SrtSocket) SetPollTimeout(pollTimeout int64) {
+	s.pollTimeout = pollTimeout
 }
 
 // Close the SRT socket
@@ -517,7 +531,7 @@ func (s SrtSocket) SetSockOptString(opt int, value string) error {
 func (s SrtSocket) setSockOpt(opt int, data unsafe.Pointer, size int) error {
 	res := C.srt_setsockopt(s.socket, 0, C.SRT_SOCKOPT(opt), data, C.int(size))
 	if res == -1 {
-		return fmt.Errorf("Error calling srt_setsockopt")
+		return fmt.Errorf("Error calling srt_setsockopt %v", C.GoString(C.srt_getlasterror_str()))
 	}
 
 	return nil
@@ -526,7 +540,7 @@ func (s SrtSocket) setSockOpt(opt int, data unsafe.Pointer, size int) error {
 func (s SrtSocket) getSockOpt(opt int, data unsafe.Pointer, size *int) error {
 	res := C.srt_getsockopt(s.socket, 0, C.SRT_SOCKOPT(opt), data, (*C.int)(unsafe.Pointer(size)))
 	if res == -1 {
-		return fmt.Errorf("Error calling srt_getsockopt")
+		return fmt.Errorf("Error calling srt_getsockopt %v", C.GoString(C.srt_getlasterror_str()))
 	}
 
 	return nil

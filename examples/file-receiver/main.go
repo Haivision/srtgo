@@ -27,14 +27,13 @@ func main() {
 		s, _, err := a.Accept()
 		if err != nil {
 			panic("Error on Accept")
-			break
 		}
 
 		buff := make([]byte, 2048)
 		fo, err := os.Create("sample.ts")
 		w := bufio.NewWriter(fo)
 		for {
-			n, err := s.Read(buff, 10000)
+			n, err := s.Read(buff)
 
 			if err != nil {
 				fmt.Println(err)
