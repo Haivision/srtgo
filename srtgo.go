@@ -621,3 +621,8 @@ func (s SrtSocket) postconfiguration(sck *SrtSocket) error {
 	err := setSocketOptions(sck.socket, bindingPost, s.options)
 	return err
 }
+
+// Now - Time in microseconds elapsed since epoch using SRT internal clock
+func Now() int64 {
+	return int64(C.srt_time_now())
+}
