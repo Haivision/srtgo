@@ -514,7 +514,7 @@ func (s SrtSocket) SetSockOptString(opt int, value string) error {
 func (s SrtSocket) setSockOpt(opt int, data unsafe.Pointer, size int) error {
 	res := C.srt_setsockopt(s.socket, 0, C.SRT_SOCKOPT(opt), data, C.int(size))
 	if res == -1 {
-		fmt.Errorf("Error calling srt_setsockopt")
+		return fmt.Errorf("Error calling srt_setsockopt")
 	}
 
 	return nil
@@ -523,7 +523,7 @@ func (s SrtSocket) setSockOpt(opt int, data unsafe.Pointer, size int) error {
 func (s SrtSocket) getSockOpt(opt int, data unsafe.Pointer, size *int) error {
 	res := C.srt_getsockopt(s.socket, 0, C.SRT_SOCKOPT(opt), data, (*C.int)(unsafe.Pointer(size)))
 	if res == -1 {
-		fmt.Errorf("Error calling srt_getsockopt")
+		return fmt.Errorf("Error calling srt_getsockopt")
 	}
 
 	return nil
@@ -538,7 +538,7 @@ func (s SrtSocket) preconfiguration() (int, error) {
 	}
 	result := C.srt_setsockopt(s.socket, 0, C.SRTO_RCVSYN, unsafe.Pointer(&blocking), C.int(unsafe.Sizeof(blocking)))
 	if result == -1 {
-		return ModeFailure, fmt.Errorf("Could not set SRTO_RCVSYN flag")
+		return ModeFailure, fmt.Errorf("could not set SRTO_RCVSYN flag")
 	}
 
 	var mode int
@@ -571,7 +571,7 @@ func (s SrtSocket) preconfiguration() (int, error) {
 		if err == nil {
 			setSocketLingerOption(s.socket, int32(li))
 		} else {
-			return ModeFailure, fmt.Errorf("Could not set LINGER option")
+			return ModeFailure, fmt.Errorf("could not set LINGER option")
 		}
 	}
 
@@ -593,12 +593,12 @@ func (s SrtSocket) postconfiguration(sck *SrtSocket) error {
 
 	res := C.srt_setsockopt(sck.socket, 0, C.SRTO_SNDSYN, unsafe.Pointer(&blocking), C.int(unsafe.Sizeof(blocking)))
 	if res == -1 {
-		fmt.Errorf("Error in postconfiguration setting SRTO_SNDSYN")
+		return fmt.Errorf("Error in postconfiguration setting SRTO_SNDSYN")
 	}
 
 	res = C.srt_setsockopt(sck.socket, 0, C.SRTO_RCVSYN, unsafe.Pointer(&blocking), C.int(unsafe.Sizeof(blocking)))
 	if res == -1 {
-		fmt.Errorf("Error in postconfiguration setting SRTO_RCVSYN")
+		return fmt.Errorf("Error in postconfiguration setting SRTO_RCVSYN")
 	}
 
 	err := setSocketOptions(sck.socket, bindingPost, s.options)
