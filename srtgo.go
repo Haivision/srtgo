@@ -101,14 +101,17 @@ func NewSrtSocket(host string, port uint16, options map[string]string) *SrtSocke
 		s.pktSize = defaultPacketSize
 	}
 
-	val, s.blocking = options["blocking"]
-	if !s.blocking || val == "0" {
+	val, exists = options["blocking"]
+	if exists && val != "0" {
+		s.blocking = true
+	}
+	if !s.blocking {
 		s.epollConnect = C.srt_epoll_create()
 		if s.epollConnect < 0 {
 			return nil
 		}
 		var modes C.int
-		modes = C.SRT_EPOLL_OUT | C.SRT_EPOLL_ERR
+		modes = C.SRT_EPOLL_IN | C.SRT_EPOLL_OUT | C.SRT_EPOLL_ERR
 		if C.srt_epoll_add_usock(s.epollConnect, s.socket, &modes) == SRT_ERROR {
 			return nil
 		}
@@ -193,7 +196,7 @@ func (s SrtSocket) Accept() (*SrtSocket, *net.UDPAddr, error) {
 		len := C.int(2)
 		timeoutMs := C.int64_t(-1)
 		ready := [2]C.int{SRT_INVALID_SOCK, SRT_INVALID_SOCK}
-		if C.srt_epoll_wait(s.epollConnect, nil, nil, &ready[0], &len, timeoutMs, nil, nil, nil, nil) == -1 {
+		if C.srt_epoll_wait(s.epollConnect, &ready[0], &len, nil, nil, timeoutMs, nil, nil, nil, nil) == -1 {
 			return nil, nil, fmt.Errorf("srt accept, epoll wait issue")
 		}
 	}
