@@ -197,7 +197,7 @@ func (s SrtSocket) Accept() (*SrtSocket, *net.UDPAddr, error) {
 		timeoutMs := C.int64_t(-1)
 		ready := [2]C.int{SRT_INVALID_SOCK, SRT_INVALID_SOCK}
 		if C.srt_epoll_wait(s.epollConnect, &ready[0], &len, nil, nil, timeoutMs, nil, nil, nil, nil) == -1 {
-			return nil, nil, fmt.Errorf("srt accept, epoll wait issue")
+			return nil, nil, fmt.Errorf("srt accept, epoll error: %s", C.GoString(C.srt_getlasterror_str()))
 		}
 	}
 
@@ -205,7 +205,7 @@ func (s SrtSocket) Accept() (*SrtSocket, *net.UDPAddr, error) {
 	sclen := C.int(syscall.SizeofSockaddrAny)
 	socket := C.srt_accept(s.socket, (*C.struct_sockaddr)(unsafe.Pointer(&addr)), &sclen)
 	if socket == SRT_INVALID_SOCK {
-		return nil, nil, fmt.Errorf("srt accept, error accepting the connection: %v", C.GoString(C.srt_getlasterror_str()))
+		return nil, nil, fmt.Errorf("srt accept, error accepting the connection: %s", C.GoString(C.srt_getlasterror_str()))
 	}
 
 	newSocket, err := newFromSocket(&s, socket)
@@ -263,7 +263,7 @@ func (s SrtSocket) Connect() error {
 				return fmt.Errorf("srt connect, connection failed %d", state)
 			}
 		} else {
-			return fmt.Errorf("srt connect, epoll wait issue")
+			return fmt.Errorf("srt connect, epoll error: %s", C.GoString(C.srt_getlasterror_str()))
 		}
 	}
 

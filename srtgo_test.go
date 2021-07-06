@@ -1,7 +1,9 @@
 package srtgo
 
 import (
+	"sync"
 	"testing"
+	"time"
 )
 
 func TestNewSocket(t *testing.T) {
@@ -97,19 +99,108 @@ func TestListen(t *testing.T) {
 	}
 }
 
+func AcceptHelper(numSockets int, options map[string]string, t *testing.T) {
+	listening := make(chan struct{})
+	listener := NewSrtSocket("localhost", 8090, options)
+	var connectors []*SrtSocket
+	for i := 0; i < numSockets; i++ {
+		connectors = append(connectors, NewSrtSocket("localhost", 8090, options))
+	}
+	wg := sync.WaitGroup{}
+	timer := time.AfterFunc(time.Second, func() {
+		t.Log("Accept timed out")
+		listener.Close()
+		for _, s := range connectors {
+			s.Close()
+		}
+	})
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		<-listening
+		for _, s := range connectors {
+			err := s.Connect()
+			if err != nil {
+				t.Error(err)
+			}
+		}
+	}()
+
+	err := listener.Listen(numSockets)
+	if err != nil {
+		t.Error(err)
+	}
+	listening <- struct{}{}
+	for i := 0; i < numSockets; i++ {
+		sock, addr, err := listener.Accept()
+		if err != nil {
+			t.Error(err)
+		}
+		if sock == nil || addr == nil {
+			t.Error("Expected non-nil addr and sock")
+		}
+	}
+
+	wg.Wait()
+	if timer.Stop() {
+		listener.Close()
+		for _, s := range connectors {
+			s.Close()
+		}
+	}
+}
+
+func TestAcceptNonBlocking(t *testing.T) {
+	InitSRT()
+
+	options := make(map[string]string)
+	options["transtype"] = "file"
+	AcceptHelper(1, options, t)
+}
+
+func TestAcceptBlocking(t *testing.T) {
+	InitSRT()
+
+	options := make(map[string]string)
+	options["blocking"] = "1"
+	options["transtype"] = "file"
+	AcceptHelper(1, options, t)
+}
+
+func TestMultipleAcceptNonBlocking(t *testing.T) {
+	InitSRT()
+
+	options := make(map[string]string)
+	options["transtype"] = "file"
+	AcceptHelper(3, options, t)
+}
+
+func TestMultipleAcceptBlocking(t *testing.T) {
+	InitSRT()
+
+	options := make(map[string]string)
+	options["blocking"] = "1"
+	options["transtype"] = "file"
+	AcceptHelper(3, options, t)
+}
+
 func TestSetSockOptInt(t *testing.T) {
 	InitSRT()
 	options := make(map[string]string)
 	a := NewSrtSocket("localhost", 8090, options)
 
-	err := a.SetSockOptInt(SRTO_LATENCY, 200)
+	expected := 200
+	err := a.SetSockOptInt(SRTO_LATENCY, expected)
 	if err != nil {
-		t.Error("Error on TestSetSockOpt")
+		t.Error(err)
 	}
 
 	v, err := a.GetSockOptInt(SRTO_LATENCY)
-	if v != 200 {
-		t.Error("Error in SetSockOptInt/GetSockOptInt", v)
+	if err != nil {
+		t.Error(err)
+	}
+	if v != expected {
+		t.Errorf("Failed to set SRTO_LATENCY expected %d, got %d\n", expected, v)
 	}
 }
 
@@ -118,14 +209,18 @@ func TestSetSockOptString(t *testing.T) {
 	options := make(map[string]string)
 	a := NewSrtSocket("localhost", 8090, options)
 
-	err := a.SetSockOptString(SRTO_STREAMID, "123")
+	expected := "123"
+	err := a.SetSockOptString(SRTO_STREAMID, expected)
 	if err != nil {
-		t.Error("Error on TestSetSockOpt")
+		t.Error(err)
 	}
 
 	v, err := a.GetSockOptString(SRTO_STREAMID)
-	if v != "123" {
-		t.Error("Error in SetSockOptString/GetSockOptString", v)
+	if err != nil {
+		t.Error(err)
+	}
+	if v != expected {
+		t.Errorf("Failed to set SRTO_STREAMID expected %s, got %s\n", expected, v)
 	}
 }
 
@@ -134,13 +229,17 @@ func TestSetSockOptBool(t *testing.T) {
 	options := make(map[string]string)
 	a := NewSrtSocket("localhost", 8090, options)
 
-	err := a.SetSockOptBool(SRTO_MESSAGEAPI, true)
+	expected := true
+	err := a.SetSockOptBool(SRTO_MESSAGEAPI, expected)
 	if err != nil {
-		t.Error("Error on TestSetSockOpt")
+		t.Error(err)
 	}
 
 	v, err := a.GetSockOptBool(SRTO_MESSAGEAPI)
-	if v != true {
-		t.Error("Error in SetSockOptBool/GetSockOptBool", v)
+	if err != nil {
+		t.Error(err)
+	}
+	if v != expected {
+		t.Errorf("Failed to set SRTO_MESSAGEAPI expected %t, got %t\n", expected, v)
 	}
 }
