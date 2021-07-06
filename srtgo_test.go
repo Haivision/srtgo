@@ -99,12 +99,12 @@ func TestListen(t *testing.T) {
 	}
 }
 
-func AcceptHelper(numSockets int, options map[string]string, t *testing.T) {
+func AcceptHelper(numSockets int, port uint16, options map[string]string, t *testing.T) {
 	listening := make(chan struct{})
-	listener := NewSrtSocket("localhost", 8090, options)
+	listener := NewSrtSocket("localhost", port, options)
 	var connectors []*SrtSocket
 	for i := 0; i < numSockets; i++ {
-		connectors = append(connectors, NewSrtSocket("localhost", 8090, options))
+		connectors = append(connectors, NewSrtSocket("localhost", port, options))
 	}
 	wg := sync.WaitGroup{}
 	timer := time.AfterFunc(time.Second, func() {
@@ -155,7 +155,7 @@ func TestAcceptNonBlocking(t *testing.T) {
 
 	options := make(map[string]string)
 	options["transtype"] = "file"
-	AcceptHelper(1, options, t)
+	AcceptHelper(1, 8091, options, t)
 }
 
 func TestAcceptBlocking(t *testing.T) {
@@ -164,7 +164,7 @@ func TestAcceptBlocking(t *testing.T) {
 	options := make(map[string]string)
 	options["blocking"] = "1"
 	options["transtype"] = "file"
-	AcceptHelper(1, options, t)
+	AcceptHelper(1, 8092, options, t)
 }
 
 func TestMultipleAcceptNonBlocking(t *testing.T) {
@@ -172,7 +172,7 @@ func TestMultipleAcceptNonBlocking(t *testing.T) {
 
 	options := make(map[string]string)
 	options["transtype"] = "file"
-	AcceptHelper(3, options, t)
+	AcceptHelper(3, 8093, options, t)
 }
 
 func TestMultipleAcceptBlocking(t *testing.T) {
@@ -181,7 +181,7 @@ func TestMultipleAcceptBlocking(t *testing.T) {
 	options := make(map[string]string)
 	options["blocking"] = "1"
 	options["transtype"] = "file"
-	AcceptHelper(3, options, t)
+	AcceptHelper(3, 8094, options, t)
 }
 
 func TestSetSockOptInt(t *testing.T) {
