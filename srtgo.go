@@ -277,8 +277,8 @@ func (s SrtSocket) Connect() error {
 	return nil
 }
 
-// Read data from the SRT socket
-func (s SrtSocket) Read(b []byte) (n int, err error) {
+// ReadMsg from the socket including SRT control data.
+func (s SrtSocket) ReadMsg(b []byte) (n int, ctrl SrtMsgCtrl, err error) {
 	if !s.blocking {
 		len := C.int(2)
 		timeoutMs := C.int64_t(s.pollTimeout)
@@ -286,18 +286,32 @@ func (s SrtSocket) Read(b []byte) (n int, err error) {
 
 		if C.srt_epoll_wait(s.epollIo, &ready[0], &len, nil, nil, timeoutMs, nil, nil, nil, nil) == SRT_ERROR {
 			if C.srt_getlasterror(nil) == C.SRT_ETIMEOUT {
-				return 0, nil
+				return
 			}
-			return 0, fmt.Errorf("error in read:epoll %s", C.GoString(C.srt_getlasterror_str()))
+			err = fmt.Errorf("error in read:epoll %s", C.GoString(C.srt_getlasterror_str()))
+			return
 		}
 	}
 
-	res := C.srt_recvmsg2(s.socket, (*C.char)(unsafe.Pointer(&b[0])), C.int(len(b)), nil)
+	var c C.SRT_MSGCTRL
+
+	res := C.srt_recvmsg2(s.socket, (*C.char)(unsafe.Pointer(&b[0])), C.int(len(b)), &c)
+
 	if res == SRT_ERROR {
-		return 0, fmt.Errorf("error in read::recv %s", C.GoString(C.srt_getlasterror_str()))
+		err = fmt.Errorf("error in read::recv %s", C.GoString(C.srt_getlasterror_str()))
+		return
 	}
 
-	return int(res), nil
+	n = int(res)
+	ctrl = newSrtMsgCtrl(&c)
+
+	return
+}
+
+// Read data from the SRT socket
+func (s SrtSocket) Read(b []byte) (n int, err error) {
+	n, _, err = s.ReadMsg(b)
+	return
 }
 
 // Write data to the SRT socket
