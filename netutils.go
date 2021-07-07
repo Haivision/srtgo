@@ -37,7 +37,7 @@ func udpAddrFromSockaddr(addr *syscall.RawSockaddrAny) (*net.UDPAddr, error) {
 			ptr.Addr[3],
 		)
 	default:
-		fmt.Errorf("Unknown address family: %v", addr.Addr.Family)
+		return nil, fmt.Errorf("unknown address family: %v", addr.Addr.Family)
 	}
 
 	return &udpAddr, nil
