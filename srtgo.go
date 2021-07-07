@@ -357,7 +357,7 @@ func (s *SrtSocket) SetPollTimeout(pollTimeout int64) {
 }
 
 // Close the SRT socket
-func (s SrtSocket) Close() {
+func (s *SrtSocket) Close() {
 	if !s.blocking {
 		if s.epollConnect != -1 {
 			C.srt_epoll_release(s.epollConnect)
