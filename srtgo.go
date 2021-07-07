@@ -139,6 +139,7 @@ func newFromSocket(acceptSocket *SrtSocket, socket C.SRTSOCKET) (*SrtSocket, err
 	s.socket = socket
 	s.pktSize = acceptSocket.pktSize
 	s.blocking = acceptSocket.blocking
+	s.pollTimeout = acceptSocket.pollTimeout
 
 	err := acceptSocket.postconfiguration(s)
 	if err != nil {
@@ -351,7 +352,7 @@ func (s SrtSocket) PollTimeout() int64 {
 
 // SetPollTimeout - Sets polling max time, in milliseconds, for connect/read/write operations.
 // Only applied when socket is in non-blocking mode.
-func (s SrtSocket) SetPollTimeout(pollTimeout int64) {
+func (s *SrtSocket) SetPollTimeout(pollTimeout int64) {
 	s.pollTimeout = pollTimeout
 }
 
