@@ -6,6 +6,7 @@ type SrtSockConnected struct{}
 type SrtConnectionRejected struct{}
 type SrtConnectTimeout struct{}
 type SrtSocketClosed struct{}
+type SrtEpollTimeout struct{}
 
 func (m *SrtInvalidSock) Error() string {
 	return "Socket u indicates no valid socket ID"
@@ -28,5 +29,17 @@ func (m *SrtConnectTimeout) Error() string {
 }
 
 func (m *SrtSocketClosed) Error() string {
-	return "The socket u has been closed while the function was blocking the call"
+	return "The socket has been closed"
+}
+
+func (m *SrtEpollTimeout) Error() string {
+	return "Operation has timed out"
+}
+
+func (m *SrtEpollTimeout) Timeout() bool {
+	return true
+}
+
+func (m *SrtEpollTimeout) Temporary() bool {
+	return true
 }
