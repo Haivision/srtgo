@@ -42,16 +42,16 @@ const (
 
 // SrtSocket - SRT socket
 type SrtSocket struct {
-	socket       C.int
-	epollConnect C.int
-	epollIo      C.int
-	blocking     bool
-	host         string
-	port         uint16
-	options      map[string]string
-	mode         int
-	pktSize      int
-	pollTimeout  int64
+	socket      C.int
+	epollIn     C.int
+	epollOut    C.int
+	blocking    bool
+	host        string
+	port        uint16
+	options     map[string]string
+	mode        int
+	pktSize     int
+	pollTimeout int64
 }
 
 var (
@@ -108,19 +108,19 @@ func NewSrtSocket(host string, port uint16, options map[string]string) *SrtSocke
 		s.blocking = true
 	}
 	if !s.blocking {
-		s.epollConnect = C.srt_epoll_create()
-		if s.epollConnect < 0 {
+		s.epollIn = C.srt_epoll_create()
+		if s.epollIn < 0 {
 			return nil
 		}
 		var modes C.int
-		modes = C.SRT_EPOLL_IN | C.SRT_EPOLL_OUT | C.SRT_EPOLL_ERR
-		if C.srt_epoll_add_usock(s.epollConnect, s.socket, &modes) == SRT_ERROR {
+		modes = C.SRT_EPOLL_IN | C.SRT_EPOLL_ERR
+		if C.srt_epoll_add_usock(s.epollIn, s.socket, &modes) == SRT_ERROR {
 			return nil
 		}
 
-		s.epollIo = C.srt_epoll_create()
-		modes = C.SRT_EPOLL_IN | C.SRT_EPOLL_OUT | C.SRT_EPOLL_ERR
-		if C.srt_epoll_add_usock(s.epollIo, s.socket, &modes) == SRT_ERROR {
+		s.epollOut = C.srt_epoll_create()
+		modes = C.SRT_EPOLL_OUT | C.SRT_EPOLL_ERR
+		if C.srt_epoll_add_usock(s.epollOut, s.socket, &modes) == SRT_ERROR {
 			return nil
 		}
 	}
@@ -147,9 +147,21 @@ func newFromSocket(acceptSocket *SrtSocket, socket C.SRTSOCKET) (*SrtSocket, err
 	}
 
 	if !s.blocking {
-		s.epollIo = C.srt_epoll_create()
-		var modes C.int = C.SRT_EPOLL_IN | C.SRT_EPOLL_OUT | C.SRT_EPOLL_ERR
-		if C.srt_epoll_add_usock(s.epollIo, s.socket, &modes) == SRT_ERROR {
+		s.epollIn = C.srt_epoll_create()
+		if s.epollIn < 0 {
+			return nil, fmt.Errorf("failed to create epoll: %d", s.epollIn)
+		}
+		var modes C.int = C.SRT_EPOLL_IN | C.SRT_EPOLL_ERR
+		if C.srt_epoll_add_usock(s.epollIn, s.socket, &modes) == SRT_ERROR {
+			return nil, fmt.Errorf("srt epoll: %v", C.GoString(C.srt_getlasterror_str()))
+		}
+
+		s.epollOut = C.srt_epoll_create()
+		if s.epollOut < 0 {
+			return nil, fmt.Errorf("failed to create epoll: %d", s.epollOut)
+		}
+		modes = C.SRT_EPOLL_OUT | C.SRT_EPOLL_ERR
+		if C.srt_epoll_add_usock(s.epollOut, s.socket, &modes) == SRT_ERROR {
 			return nil, fmt.Errorf("srt epoll: %v", C.GoString(C.srt_getlasterror_str()))
 		}
 	}
@@ -195,12 +207,19 @@ func (s SrtSocket) Listen(backlog int) error {
 // Accept an incoming connection
 func (s SrtSocket) Accept() (*SrtSocket, *net.UDPAddr, error) {
 	if !s.blocking {
-		// Socket readiness for connection is checked by polling on WRITE allowed sockets.
-		len := C.int(2)
+		// Socket readiness for accept is checked by polling on SRT_EPOLL_IN
 		timeoutMs := C.int64_t(s.pollTimeout)
-		ready := [2]C.int{SRT_INVALID_SOCK, SRT_INVALID_SOCK}
-		if C.srt_epoll_wait(s.epollConnect, &ready[0], &len, nil, nil, timeoutMs, nil, nil, nil, nil) == -1 {
+		fds := [1]C.SRT_EPOLL_EVENT{}
+		len := C.int(1)
+		res := C.srt_epoll_uwait(s.epollIn, &fds[0], len, timeoutMs)
+		if res == 0 {
+			return nil, nil, &SrtEpollTimeout{}
+		}
+		if res == SRT_ERROR {
 			return nil, nil, fmt.Errorf("srt accept, epoll error: %s", C.GoString(C.srt_getlasterror_str()))
+		}
+		if fds[0].events&C.SRT_EPOLL_ERR > 0 {
+			return nil, nil, &SrtSocketClosed{}
 		}
 	}
 
@@ -256,17 +275,23 @@ func (s SrtSocket) Connect() error {
 	runtime.UnlockOSThread()
 
 	if !s.blocking {
-		// Socket readiness for connection is checked by polling on WRITE allowed sockets.
-		len := C.int(2)
+		// Socket readiness for connection is checked by polling SRT_EPOLL_OUT.
 		timeoutMs := C.int64_t(s.pollTimeout)
-		ready := [2]C.int{SRT_INVALID_SOCK, SRT_INVALID_SOCK}
-		if C.srt_epoll_wait(s.epollConnect, nil, nil, &ready[0], &len, timeoutMs, nil, nil, nil, nil) != -1 {
+		fds := [1]C.SRT_EPOLL_EVENT{}
+		len := C.int(1)
+		res := C.srt_epoll_uwait(s.epollOut, &fds[0], len, timeoutMs)
+		if res == 0 {
+			return &SrtEpollTimeout{}
+		}
+		if res == SRT_ERROR {
 			state := C.srt_getsockstate(s.socket)
 			if state != C.SRTS_CONNECTED {
 				return fmt.Errorf("srt connect, connection failed %d", state)
 			}
-		} else {
 			return fmt.Errorf("srt connect, epoll error: %s", C.GoString(C.srt_getlasterror_str()))
+		}
+		if fds[0].events&C.SRT_EPOLL_ERR > 0 {
+			return &SrtSocketClosed{}
 		}
 	}
 
@@ -281,15 +306,18 @@ func (s SrtSocket) Connect() error {
 // Read data from the SRT socket
 func (s SrtSocket) Read(b []byte) (n int, err error) {
 	if !s.blocking {
-		len := C.int(2)
 		timeoutMs := C.int64_t(s.pollTimeout)
-		ready := [2]C.int{SRT_INVALID_SOCK, SRT_INVALID_SOCK}
-
-		if C.srt_epoll_wait(s.epollIo, &ready[0], &len, nil, nil, timeoutMs, nil, nil, nil, nil) == SRT_ERROR {
-			if C.srt_getlasterror(nil) == C.SRT_ETIMEOUT {
-				return 0, nil
-			}
+		fds := [1]C.SRT_EPOLL_EVENT{}
+		len := C.int(1)
+		res := C.srt_epoll_uwait(s.epollIn, &fds[0], len, timeoutMs)
+		if res == 0 {
+			return 0, &SrtEpollTimeout{}
+		}
+		if res == SRT_ERROR {
 			return 0, fmt.Errorf("error in read:epoll %s", C.GoString(C.srt_getlasterror_str()))
+		}
+		if fds[0].events&C.SRT_EPOLL_ERR > 0 {
+			return 0, &SrtSocketClosed{}
 		}
 	}
 
@@ -305,13 +333,17 @@ func (s SrtSocket) Read(b []byte) (n int, err error) {
 func (s SrtSocket) Write(b []byte) (n int, err error) {
 	if !s.blocking {
 		timeoutMs := C.int64_t(s.pollTimeout)
-		len := C.int(2)
-		ready := [2]C.int{SRT_INVALID_SOCK, SRT_INVALID_SOCK}
-		rlen := C.int(2)
-		rready := [2]C.int{SRT_INVALID_SOCK, SRT_INVALID_SOCK}
-
-		if C.srt_epoll_wait(s.epollIo, &rready[0], &rlen, &ready[0], &len, timeoutMs, nil, nil, nil, nil) == SRT_ERROR {
+		fds := [1]C.SRT_EPOLL_EVENT{}
+		len := C.int(1)
+		res := C.srt_epoll_uwait(s.epollOut, &fds[0], len, timeoutMs)
+		if res == 0 {
+			return 0, &SrtEpollTimeout{}
+		}
+		if res == SRT_ERROR {
 			return 0, fmt.Errorf("error in write:epoll %s", C.GoString(C.srt_getlasterror_str()))
+		}
+		if fds[0].events&C.SRT_EPOLL_ERR > 0 {
+			return 0, &SrtSocketClosed{}
 		}
 	}
 
@@ -359,13 +391,13 @@ func (s *SrtSocket) SetPollTimeout(pollTimeout int64) {
 // Close the SRT socket
 func (s *SrtSocket) Close() {
 	if !s.blocking {
-		if s.epollConnect != -1 {
-			C.srt_epoll_release(s.epollConnect)
-			s.epollConnect = -1
+		if s.epollIn != -1 {
+			C.srt_epoll_release(s.epollIn)
+			s.epollIn = -1
 		}
-		if s.epollIo != -1 {
-			C.srt_epoll_release(s.epollIo)
-			s.epollIo = -1
+		if s.epollOut != -1 {
+			C.srt_epoll_release(s.epollOut)
+			s.epollOut = -1
 		}
 	}
 	C.srt_close(s.socket)
