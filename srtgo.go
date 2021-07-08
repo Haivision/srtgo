@@ -4,12 +4,11 @@ package srtgo
 #cgo LDFLAGS: -lsrt
 #include <srt/srt.h>
 #include <srt/access_control.h>
+#include "callback.h"
 static const SRTSOCKET get_srt_invalid_sock() { return SRT_INVALID_SOCK; };
 static const int get_srt_error() { return SRT_ERROR; };
 static const int get_srt_error_reject_predefined() { return SRT_REJC_PREDEFINED; };
 static const int get_srt_error_reject_userdefined() { return SRT_REJC_USERDEFINED; };
-
-extern int srtListenCB(void* opaque, SRTSOCKET ns, int hs_version, const struct sockaddr* peeraddr, const char* streamid);
 */
 import "C"
 
@@ -55,8 +54,9 @@ type SrtSocket struct {
 }
 
 var (
-	listenCallbackMutex sync.Mutex
-	listenCallbackMap   map[C.int]unsafe.Pointer = make(map[C.int]unsafe.Pointer)
+	callbackMutex      sync.Mutex
+	listenCallbackMap  map[C.int]unsafe.Pointer = make(map[C.int]unsafe.Pointer)
+	connectCallbackMap map[C.int]unsafe.Pointer = make(map[C.int]unsafe.Pointer)
 )
 
 // Static consts from library
@@ -243,6 +243,25 @@ func (s SrtSocket) Accept() (*SrtSocket, *net.UDPAddr, error) {
 	return newSocket, udpAddr, nil
 }
 
+func errcodeToError(errorcode C.int) error {
+	switch errorcode {
+	case C.SRT_EINVSOCK:
+		return &SrtInvalidSock{}
+	case C.SRT_ERDVUNBOUND:
+		return &SrtRendezvousUnbound{}
+	case C.SRT_ECONNSOCK:
+		return &SrtSockConnected{}
+	case C.SRT_ECONNREJ:
+		return &SrtConnectionRejected{}
+	case C.SRT_ENOSERVER:
+		return &SrtConnectTimeout{}
+	case C.SRT_ESCLOSED:
+		return &SrtSocketClosed{}
+	default:
+		return fmt.Errorf("unknown error")
+	}
+}
+
 // Connect to a remote endpoint
 func (s SrtSocket) Connect() error {
 	sa, salen, err := CreateAddrInet(s.host, s.port)
@@ -256,21 +275,7 @@ func (s SrtSocket) Connect() error {
 		C.srt_close(s.socket)
 		srt_errno := C.srt_getlasterror(nil)
 		runtime.UnlockOSThread()
-		switch srt_errno {
-		case C.SRT_EINVSOCK:
-			return &SrtInvalidSock{}
-		case C.SRT_ERDVUNBOUND:
-			return &SrtRendezvousUnbound{}
-		case C.SRT_ECONNSOCK:
-			return &SrtSockConnected{}
-		case C.SRT_ECONNREJ:
-			return &SrtConnectionRejected{}
-		case C.SRT_ENOSERVER:
-			return &SrtConnectTimeout{}
-		case C.SRT_ESCLOSED:
-			return &SrtSocketClosed{}
-		}
-		return fmt.Errorf("Error in srt_connect")
+		return errcodeToError(srt_errno)
 	}
 	runtime.UnlockOSThread()
 
@@ -401,18 +406,21 @@ func (s *SrtSocket) Close() {
 		}
 	}
 	C.srt_close(s.socket)
-	listenCallbackMutex.Lock()
+	callbackMutex.Lock()
 	if ptr, exists := listenCallbackMap[s.socket]; exists {
 		gopointer.Unref(ptr)
 	}
-	listenCallbackMutex.Unlock()
+	if ptr, exists := connectCallbackMap[s.socket]; exists {
+		gopointer.Unref(ptr)
+	}
+	callbackMutex.Unlock()
 }
 
 // ListenCallbackFunc specifies a function to be called before a connecting socket is passed to accept
 type ListenCallbackFunc func(socket *SrtSocket, version int, addr *net.UDPAddr, streamid string) bool
 
 //export srtListenCBWrapper
-func srtListenCBWrapper(arg unsafe.Pointer, socket C.int, hsVersion C.int, peeraddr *C.struct_sockaddr, streamid *C.char) C.int {
+func srtListenCBWrapper(arg unsafe.Pointer, socket C.SRTSOCKET, hsVersion C.int, peeraddr *C.struct_sockaddr, streamid *C.char) C.int {
 	userCB := gopointer.Restore(arg).(ListenCallbackFunc)
 
 	s := new(SrtSocket)
@@ -433,12 +441,40 @@ func (s SrtSocket) SetListenCallback(cb ListenCallbackFunc) {
 	ptr := gopointer.Save(cb)
 	C.srt_listen_callback(s.socket, (*C.srt_listen_callback_fn)(C.srtListenCB), ptr)
 
-	listenCallbackMutex.Lock()
-	defer listenCallbackMutex.Unlock()
+	callbackMutex.Lock()
+	defer callbackMutex.Unlock()
 	if listenCallbackMap[s.socket] != nil {
 		gopointer.Unref(listenCallbackMap[s.socket])
 	}
 	listenCallbackMap[s.socket] = ptr
+}
+
+// ConnectCallbackFunc specifies a function to be called after a socket or connection in a group has failed.
+type ConnectCallbackFunc func(socket *SrtSocket, err error, addr *net.UDPAddr, token int)
+
+//export srtConnectCBWrapper
+func srtConnectCBWrapper(arg unsafe.Pointer, socket C.SRTSOCKET, errcode C.int, peeraddr *C.struct_sockaddr, token C.int) {
+	userCB := gopointer.Restore(arg).(ConnectCallbackFunc)
+
+	s := new(SrtSocket)
+	s.socket = socket
+	udpAddr, _ := udpAddrFromSockaddr((*syscall.RawSockaddrAny)(unsafe.Pointer(peeraddr)))
+
+	userCB(s, errcodeToError(errcode), udpAddr, int(token))
+}
+
+// SetConnectCallback - set a function to be called after a socket or connection in a group has failed
+// Note that the function is not guaranteed to be called if the socket is set to blocking mode.
+func (s SrtSocket) SetConnectCallback(cb ConnectCallbackFunc) {
+	ptr := gopointer.Save(cb)
+	C.srt_connect_callback(s.socket, (*C.srt_connect_callback_fn)(C.srtConnectCB), ptr)
+
+	callbackMutex.Lock()
+	defer callbackMutex.Unlock()
+	if connectCallbackMap[s.socket] != nil {
+		gopointer.Unref(connectCallbackMap[s.socket])
+	}
+	connectCallbackMap[s.socket] = ptr
 }
 
 // Rejection reasons
