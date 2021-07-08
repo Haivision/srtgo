@@ -8,7 +8,7 @@ Go bindings for [SRT](https://github.com/Haivision/srt) (Secure Reliable Transpo
 The purpose of srtgo is easing the adoption of SRT transport technology. Using Go, with just a few lines of code you can implement an application that sends/receives data with all the benefits of SRT technology: security and reliability, while keeping latency low.
 
 ## Is this a new implementation of SRT?
-No! We are just exposing the great work done by the community in the [SRT project]((https://github.com/Haivision/srt) as a golang library. All the functionality and implementation still resides in the official SRT project.
+No! We are just exposing the great work done by the community in the [SRT project](https://github.com/Haivision/srt) as a golang library. All the functionality and implementation still resides in the official SRT project.
 
 
 # Features supported
