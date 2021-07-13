@@ -20,6 +20,7 @@ import (
 	"strconv"
 	"sync"
 	"syscall"
+	"time"
 	"unsafe"
 
 	gopointer "github.com/mattn/go-pointer"
@@ -381,16 +382,16 @@ func (s SrtSocket) PacketSize() int {
 	return s.pktSize
 }
 
-// PollTimeout - Return polling max time, in milliseconds, for connect/read/write operations.
+// PollTimeout - Return polling max time, for connect/read/write operations.
 // Only applied when socket is in non-blocking mode.
-func (s SrtSocket) PollTimeout() int64 {
-	return s.pollTimeout
+func (s SrtSocket) PollTimeout() time.Duration {
+	return time.Duration(s.pollTimeout) * time.Millisecond
 }
 
-// SetPollTimeout - Sets polling max time, in milliseconds, for connect/read/write operations.
+// SetPollTimeout - Sets polling max time, for connect/read/write operations.
 // Only applied when socket is in non-blocking mode.
-func (s *SrtSocket) SetPollTimeout(pollTimeout int64) {
-	s.pollTimeout = pollTimeout
+func (s *SrtSocket) SetPollTimeout(pollTimeout time.Duration) {
+	s.pollTimeout = pollTimeout.Milliseconds()
 }
 
 // Close the SRT socket
