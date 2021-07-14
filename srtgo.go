@@ -320,34 +320,6 @@ func (s SrtSocket) Read(b []byte) (n int, err error) {
 	return int(res), nil
 }
 
-// Write data to the SRT socket
-func (s SrtSocket) Write(b []byte) (n int, err error) {
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-	if !s.blocking {
-		timeoutMs := C.int64_t(s.pollTimeout)
-		fds := [1]C.SRT_EPOLL_EVENT{}
-		len := C.int(1)
-		res := C.srt_epoll_uwait(s.epollOut, &fds[0], len, timeoutMs)
-		if res == 0 {
-			return 0, &SrtEpollTimeout{}
-		}
-		if res == SRT_ERROR {
-			return 0, fmt.Errorf("error in write:epoll %w", srtGetAndClearError())
-		}
-		if fds[0].events&C.SRT_EPOLL_ERR > 0 {
-			return 0, &SrtSocketClosed{}
-		}
-	}
-
-	res := C.srt_sendmsg2(s.socket, (*C.char)(unsafe.Pointer(&b[0])), C.int(len(b)), nil)
-	if res == SRT_ERROR {
-		return 0, fmt.Errorf("error in write:srt_sendmsg2 %w", srtGetAndClearError())
-	}
-
-	return int(res), nil
-}
-
 // Stats - Retrieve stats from the SRT socket
 func (s SrtSocket) Stats() (*SrtStats, error) {
 	runtime.LockOSThread()
