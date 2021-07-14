@@ -292,34 +292,6 @@ func (s SrtSocket) Connect() error {
 	return nil
 }
 
-// Read data from the SRT socket
-func (s SrtSocket) Read(b []byte) (n int, err error) {
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-	if !s.blocking {
-		timeoutMs := C.int64_t(s.pollTimeout)
-		fds := [1]C.SRT_EPOLL_EVENT{}
-		len := C.int(1)
-		res := C.srt_epoll_uwait(s.epollIn, &fds[0], len, timeoutMs)
-		if res == 0 {
-			return 0, &SrtEpollTimeout{}
-		}
-		if res == SRT_ERROR {
-			return 0, fmt.Errorf("error in read:epoll %w", srtGetAndClearError())
-		}
-		if fds[0].events&C.SRT_EPOLL_ERR > 0 {
-			return 0, srtGetAndClearError()
-		}
-	}
-
-	res := C.srt_recvmsg2(s.socket, (*C.char)(unsafe.Pointer(&b[0])), C.int(len(b)), nil)
-	if res == SRT_ERROR {
-		return 0, fmt.Errorf("error in read:srt_recvmsg2 %w", srtGetAndClearError())
-	}
-
-	return int(res), nil
-}
-
 // Stats - Retrieve stats from the SRT socket
 func (s SrtSocket) Stats() (*SrtStats, error) {
 	runtime.LockOSThread()
