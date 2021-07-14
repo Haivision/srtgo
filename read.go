@@ -17,8 +17,6 @@ int srt_recvmsg2_wrapped(SRTSOCKET u, char* buf, int len, SRT_MSGCTRL *mctrl, in
 import "C"
 import (
 	"errors"
-	"fmt"
-	"runtime"
 	"syscall"
 	"unsafe"
 )
@@ -40,28 +38,16 @@ func srtRecvMsg2Impl(u C.SRTSOCKET, buf []byte, msgctrl *C.SRT_MSGCTRL) (n int, 
 // Read data from the SRT socket
 func (s SrtSocket) Read(b []byte) (n int, err error) {
 	//Fastpath
+	if !s.blocking {
+		s.pd.reset(ModeRead)
+	}
 	n, err = srtRecvMsg2Impl(s.socket, b, nil)
 
-	if err != nil {
-		if errors.Is(err, error(EAsyncRCV)) {
-			runtime.LockOSThread()
-			defer runtime.UnlockOSThread()
-			timeoutMs := C.int64_t(s.pollTimeout)
-			fds := [1]C.SRT_EPOLL_EVENT{}
-			len := C.int(1)
-			res := C.srt_epoll_uwait(s.epollIn, &fds[0], len, timeoutMs)
-			if res == 0 {
-				return 0, &SrtEpollTimeout{}
-			}
-			if res == SRT_ERROR {
-				return 0, fmt.Errorf("error in read:epoll %w", srtGetAndClearError())
-			}
-			if fds[0].events&C.SRT_EPOLL_ERR > 0 {
-				return 0, srtGetAndClearError()
-			}
-			//Read again, now that we are ready
-			n, err = srtRecvMsg2Impl(s.socket, b, nil)
+	for {
+		if !errors.Is(err, error(EAsyncRCV)) || s.blocking {
+			return
 		}
+		s.pd.wait(ModeRead)
+		n, err = srtRecvMsg2Impl(s.socket, b, nil)
 	}
-	return
 }
