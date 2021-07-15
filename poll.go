@@ -11,27 +11,27 @@ import (
 	"sync"
 	"time"
 	"unsafe"
+        "sync/atomic"
 )
 
-type pollState int32
-
 const (
-	pollDefault = pollState(iota)
-	pollReady   = pollState(iota)
-	pollWait    = pollState(iota)
+	pollDefault = int32(iota)
+	pollReady   = int32(iota)
+	pollWait    = int32(iota)
 )
 
 type pollDesc struct {
 	lock      sync.Mutex
+        closing   bool
 	fd        C.SRTSOCKET
 	pollErr   bool
 	unblockRd chan interface{}
-	rdState   pollState
+	rdState   int32
 	rdLock    sync.Mutex
 	rd        int64
 	rdSeq     int64
 	unblockWr chan interface{}
-	wrState   pollState
+	wrState   int32
 	wrLock    sync.Mutex
 	wd        int64
 	wdSeq     int64
@@ -48,47 +48,41 @@ func (pd *pollDesc) Wait(mode int) error {
 	if err := pd.checkPollErr(mode); err != nil {
 		return err
 	}
+        state := &pd.rdState
+        unblockChan := pd.unblockRd
 	if mode == 'r' {
 		pd.rdLock.Lock()
 		defer pd.rdLock.Unlock()
-		/*
-		if pd.rdState == pollReady {
-			pd.reset(mode)
-			return nil
-		}*/
-		pd.reset(mode)
-		pd.lock.Lock()
-		pd.rdState = pollWait
-		pd.lock.Unlock()
-		fmt.Printf("WAIT READ\n\n\n\n")
-		<-pd.unblockRd
-		fmt.Printf("DONE WAIT READ\n\n\n\n")
-		err := pd.checkPollErr(mode)
-		pd.reset(mode)
-		return err
-	}
-	pd.wrLock.Lock()
-	defer pd.wrLock.Unlock()
-	/*
-	if pd.wrState == pollReady {
-		pd.reset(mode)
-		return nil
-	}*/
-	pd.reset(mode)
-	pd.lock.Lock()
-	pd.wrState = pollWait
-	pd.lock.Unlock()
-	fmt.Printf("WAIT WRITE\n\n\n\n")
-	<-pd.unblockWr
-	fmt.Printf("DONE WAIT WRITE\n\n\n\n")
-	err := pd.checkPollErr(mode)
-	pd.reset(mode)
+        } else if mode == 'w' {
+            state = &pd.wrState
+            unblockChan = pd.unblockWr
+	    pd.wrLock.Lock()
+	    defer pd.wrLock.Unlock()
+        }
+
+        for {
+            old := *state
+            if old == pollReady {
+                *state = pollDefault
+                return nil
+            }
+            if atomic.CompareAndSwapInt32(state, pollDefault, pollWait) {
+                break
+            }
+        }
+        <-unblockChan
+        err := pd.checkPollErr(mode)
+        pd.reset(mode)
 	return err
 }
 
 func (pd *pollDesc) Close() {
 	pd.lock.Lock()
 	defer pd.lock.Unlock()
+        if pd.closing {
+            return
+        }
+        pd.closing = true
 	close(pd.unblockRd)
 	close(pd.unblockWr)
 	pd.pollS.pollClose(pd)
@@ -98,12 +92,21 @@ func (pd *pollDesc) Close() {
 }
 
 func (pd *pollDesc) checkPollErr(mode int) error {
+        pd.lock.Lock()
+        defer pd.lock.Unlock()
+        if pd.closing {
+		return &SrtSocketClosed{}
+        }
+
 	if mode == 'r' && pd.rd < 0 || mode == 'w' && pd.wd < 0 {
 		return &SrtEpollTimeout{}
 	}
+
 	if pd.pollErr {
+                pd.pollErr = false//Consume the error
 		return &SrtSocketClosed{}
 	}
+
 	return nil
 }
 
@@ -156,26 +159,24 @@ func (pd *pollDesc) setDeadline(t time.Time, read, write bool) {
 }
 
 func (pd *pollDesc) unblock(mode int, pollerr, ioready bool) {
-	pd.pollErr = pollerr
-	if mode == 'r' {
-		waiting := pd.rdState == pollWait
-		pd.rdState = 0
-		if ioready {
-			pd.rdState = pollReady
-		}
-		if waiting {
-			pd.unblockRd <- struct{}{}
-		}
-		return
-	}
-	waiting := pd.wrState == pollWait
-	pd.wrState = 0
-	if ioready {
-		pd.wrState = pollReady
-	}
-	if waiting {
-		pd.unblockWr <- struct{}{}
-	}
+        if pollerr {
+                pd.lock.Lock()
+        	pd.pollErr = pollerr
+                pd.lock.Unlock()
+        }
+        state := &pd.rdState
+        unblockChan := pd.unblockRd
+        if mode == 'w' {
+            state = &pd.wrState
+            unblockChan = pd.unblockWr
+        }
+        old := atomic.LoadInt32(state)
+        if ioready {
+            atomic.StoreInt32(state, pollReady)
+        }
+        if old == pollWait {
+            unblockChan <- struct{}{}
+        }
 }
 
 func (pd *pollDesc) reset(mode int) {
@@ -221,23 +222,26 @@ func (p *pollServer) pollOpen(pd *pollDesc) {
 	//use uint because otherwise with ET it would overflow :/ (srt should accept an uint instead, or fix it's SRT_EPOLL_ET definition)
 	events := C.uint(C.SRT_EPOLL_IN | C.SRT_EPOLL_OUT | C.SRT_EPOLL_ERR | C.SRT_EPOLL_ET)
 	//via unsafe.Pointer because we cannot cast *C.uint to *C.int directly
-	fmt.Printf("Adding %d to epoll\n\n\n", pd.fd)
+        //block poller
+	p.pollDescLock.Lock()
+//        C.srt_close(p.canary)
 	ret := C.srt_epoll_add_usock(p.srtEpollDescr, pd.fd, (*C.int)(unsafe.Pointer(&events)))
 	if ret == -1 {
 		panic("ERROR ADDING FD TO EPOLL")
 	}
-	p.pollDescLock.Lock()
 	p.pollDescs[pd.fd] = pd
 	p.pollDescLock.Unlock()
 }
 
 func (p *pollServer) pollClose(pd *pollDesc) {
 	fmt.Printf("Removing %d from epoll\n\n\n", pd.fd)
+        //block poller
+	p.pollDescLock.Lock()
+//        C.srt_close(p.canary)
 	ret := C.srt_epoll_remove_usock(p.srtEpollDescr, pd.fd)
 	if ret == -1 {
 		panic("ERROR REMOVING FD FROM EPOLL")
 	}
-	p.pollDescLock.Lock()
 	delete(p.pollDescs, pd.fd)
 	p.pollDescLock.Unlock()
 }
@@ -263,20 +267,27 @@ func (p *pollServer) addCanary() {
 }
 
 func (p *pollServer) run() {
-	p.addCanary()
+	//p.addCanary()
 	timeoutMs := C.int64_t(-1)
 	fds := [128]C.SRT_EPOLL_EVENT{}
-	len := C.int(128)
+	fdlen := C.int(128)
 	for {
-		res := C.srt_epoll_uwait(p.srtEpollDescr, &fds[0], len, timeoutMs)
+                p.pollDescLock.Lock()
+                if len(p.pollDescs) == 0 {
+                    p.pollDescLock.Unlock()
+                    time.Sleep(10 * time.Millisecond)
+                    continue
+                }
+                p.pollDescLock.Unlock()
+		res := C.srt_epoll_uwait(p.srtEpollDescr, &fds[0], fdlen, timeoutMs)
 		if res == 0 {
 			continue //Shouldn't happen with -1
 		} else if res == -1 {
-			panic("srt_epoll_error")
+			//panic("srt_epoll_error")
 		} else if res > 0 {
 			max := int(res)
-			if len < res {
-				max = int(len)
+			if fdlen < res {
+				max = int(fdlen)
 			}
 			p.pollDescLock.Lock()
 			for i := 0; i < max; i++ {
@@ -287,7 +298,6 @@ func (p *pollServer) run() {
 					continue
 				}
 				pd := p.pollDescs[s]
-				pd.lock.Lock()
 				if events&C.SRT_EPOLL_ERR != 0 {
 					sockstate := C.srt_getsockstate(pd.fd)
 					fmt.Printf("EPOLL_ERR: %d sockstate: %d\n\n\n", pd.fd, sockstate)
@@ -296,9 +306,10 @@ func (p *pollServer) run() {
 						pd.unblock('r', true, false)
 						pd.unblock('w', true, false)
 					default:
-						//
+						pd.unblock('r', false, true)
+						pd.unblock('w', false, true)
 					}
-					pd.lock.Unlock()
+					//pd.lock.Unlock()
 					continue
 				}
 				if events&C.SRT_EPOLL_IN != 0 {
@@ -309,7 +320,6 @@ func (p *pollServer) run() {
 					fmt.Printf("SRT POLL OUT!\n\n\n")
 					pd.unblock('w', false, true)
 				}
-				pd.lock.Unlock()
 			}
 			p.pollDescLock.Unlock()
 		}
