@@ -7,6 +7,7 @@ package srtgo
 import "C"
 import (
 	"fmt"
+	"runtime"
 	"sync"
 	"time"
 	"unsafe"
@@ -50,10 +51,11 @@ func (pd *pollDesc) Wait(mode int) error {
 	if mode == 'r' {
 		pd.rdLock.Lock()
 		defer pd.rdLock.Unlock()
+		/*
 		if pd.rdState == pollReady {
 			pd.reset(mode)
 			return nil
-		}
+		}*/
 		pd.reset(mode)
 		pd.lock.Lock()
 		pd.rdState = pollWait
@@ -67,10 +69,11 @@ func (pd *pollDesc) Wait(mode int) error {
 	}
 	pd.wrLock.Lock()
 	defer pd.wrLock.Unlock()
+	/*
 	if pd.wrState == pollReady {
 		pd.reset(mode)
 		return nil
-	}
+	}*/
 	pd.reset(mode)
 	pd.lock.Lock()
 	pd.wrState = pollWait
@@ -88,6 +91,7 @@ func (pd *pollDesc) Close() {
 	defer pd.lock.Unlock()
 	close(pd.unblockRd)
 	close(pd.unblockWr)
+	pd.pollS.pollClose(pd)
 	//TODO: figure out a way to cleanly return these without causing any potential null pointer migrations
 	//pollDescPool.Put(pd)
 
@@ -184,11 +188,11 @@ func (pd *pollDesc) reset(mode int) {
 	}
 }
 
-func PollDescInit(s C.SRTSOCKET) *pollDesc {
+func PollDescInit(s *SrtSocket) *pollDesc {
 	pd := pollDescPool.Get().(*pollDesc)
 	pd.lock.Lock()
 	defer pd.lock.Unlock()
-	pd.fd = s
+	pd.fd = s.socket
 	pd.rdState = pollDefault
 	pd.wrState = pollDefault
 	pd.pollS = pollServerH
@@ -197,6 +201,11 @@ func PollDescInit(s C.SRTSOCKET) *pollDesc {
 	pd.rdSeq++
 	pd.wdSeq++
 	pd.pollS.pollOpen(pd)
+	runtime.SetFinalizer(s, func(obj interface{}) {
+		s := obj.(*SrtSocket)
+		s.pd.Close()
+		s.pd = nil
+	})
 	return pd
 }
 
@@ -212,6 +221,7 @@ func (p *pollServer) pollOpen(pd *pollDesc) {
 	//use uint because otherwise with ET it would overflow :/ (srt should accept an uint instead, or fix it's SRT_EPOLL_ET definition)
 	events := C.uint(C.SRT_EPOLL_IN | C.SRT_EPOLL_OUT | C.SRT_EPOLL_ERR | C.SRT_EPOLL_ET)
 	//via unsafe.Pointer because we cannot cast *C.uint to *C.int directly
+	fmt.Printf("Adding %d to epoll\n\n\n", pd.fd)
 	ret := C.srt_epoll_add_usock(p.srtEpollDescr, pd.fd, (*C.int)(unsafe.Pointer(&events)))
 	if ret == -1 {
 		panic("ERROR ADDING FD TO EPOLL")
@@ -222,6 +232,7 @@ func (p *pollServer) pollOpen(pd *pollDesc) {
 }
 
 func (p *pollServer) pollClose(pd *pollDesc) {
+	fmt.Printf("Removing %d from epoll\n\n\n", pd.fd)
 	ret := C.srt_epoll_remove_usock(p.srtEpollDescr, pd.fd)
 	if ret == -1 {
 		panic("ERROR REMOVING FD FROM EPOLL")
@@ -278,10 +289,15 @@ func (p *pollServer) run() {
 				pd := p.pollDescs[s]
 				pd.lock.Lock()
 				if events&C.SRT_EPOLL_ERR != 0 {
-					fmt.Printf("SRT POLL ERR!\n\n\n")
-					fmt.Printf("SOCKSTATE IS %d\n\n\n\n\n", C.srt_getsockstate(pd.fd))
-					pd.unblock('r', true, false)
-					pd.unblock('w', true, false)
+					sockstate := C.srt_getsockstate(pd.fd)
+					fmt.Printf("EPOLL_ERR: %d sockstate: %d\n\n\n", pd.fd, sockstate)
+					switch sockstate {
+					case C.SRTS_BROKEN, C.SRTS_CLOSING, C.SRTS_CLOSED, C.SRTS_NONEXIST:
+						pd.unblock('r', true, false)
+						pd.unblock('w', true, false)
+					default:
+						//
+					}
 					pd.lock.Unlock()
 					continue
 				}

@@ -108,7 +108,7 @@ func NewSrtSocket(host string, port uint16, options map[string]string) *SrtSocke
 		s.blocking = true
 	}
 	if !s.blocking {
-		s.pd = PollDescInit(s.socket)
+		s.pd = PollDescInit(s)
 	}
 
 	var err error
@@ -133,7 +133,7 @@ func newFromSocket(acceptSocket *SrtSocket, socket C.SRTSOCKET) (*SrtSocket, err
 	}
 
 	if !s.blocking {
-		s.pd = PollDescInit(s.socket)
+		s.pd = PollDescInit(s)
 	}
 
 	return s, nil
@@ -174,38 +174,6 @@ func (s SrtSocket) Listen(backlog int) error {
 	}
 
 	return nil
-}
-
-// Accept an incoming connection
-func (s SrtSocket) Accept() (*SrtSocket, *net.UDPAddr, error) {
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-	if !s.blocking {
-		//s.pd.SetReadDeadline(time.Now().Add(time.Duration(s.pollTimeout) * time.Millisecond))
-		if err := s.pd.Wait('r'); err != nil {
-			return nil, nil, err
-		}
-		//s.pd.SetReadDeadline(time.Time{})
-	}
-
-	var addr syscall.RawSockaddrAny
-	sclen := C.int(syscall.SizeofSockaddrAny)
-	socket := C.srt_accept(s.socket, (*C.struct_sockaddr)(unsafe.Pointer(&addr)), &sclen)
-	if socket == SRT_INVALID_SOCK {
-		return nil, nil, fmt.Errorf("srt accept, error accepting the connection: %w", srtGetAndClearError())
-	}
-
-	newSocket, err := newFromSocket(&s, socket)
-	if err != nil {
-		return nil, nil, fmt.Errorf("new socket could not be created: %w", err)
-	}
-
-	udpAddr, err := udpAddrFromSockaddr(&addr)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return newSocket, udpAddr, nil
 }
 
 // Connect to a remote endpoint
