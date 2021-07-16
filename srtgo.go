@@ -107,9 +107,6 @@ func NewSrtSocket(host string, port uint16, options map[string]string) *SrtSocke
 	if exists && val != "0" {
 		s.blocking = true
 	}
-	if !s.blocking {
-		s.pd = PollDescInit(s)
-	}
 
 	var err error
 	s.mode, err = s.preconfiguration()
@@ -133,7 +130,7 @@ func newFromSocket(acceptSocket *SrtSocket, socket C.SRTSOCKET) (*SrtSocket, err
 	}
 
 	if !s.blocking {
-		s.pd = PollDescInit(s)
+		s.pd = PollDescInit(s.socket)
 	}
 
 	return s, nil
@@ -146,7 +143,7 @@ func (s SrtSocket) GetSocket() C.int {
 // Listen for incoming connections. The backlog setting defines how many sockets
 // may be allowed to wait until they are accepted (excessive connection requests
 // are rejected in advance)
-func (s SrtSocket) Listen(backlog int) error {
+func (s *SrtSocket) Listen(backlog int) error {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 	nbacklog := C.int(backlog)
@@ -167,8 +164,12 @@ func (s SrtSocket) Listen(backlog int) error {
 		C.srt_close(s.socket)
 		return fmt.Errorf("Error in srt_listen: %w", srtGetAndClearError())
 	}
+        if !s.blocking && s.pd == nil {
+                s.pd = PollDescInit(s.socket)
+        }
 
-	err = s.postconfiguration(&s)
+
+	err = s.postconfiguration(s)
 	if err != nil {
 		return fmt.Errorf("Error setting post socket options")
 	}
@@ -177,7 +178,7 @@ func (s SrtSocket) Listen(backlog int) error {
 }
 
 // Connect to a remote endpoint
-func (s SrtSocket) Connect() error {
+func (s *SrtSocket) Connect() error {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 	sa, salen, err := CreateAddrInet(s.host, s.port)
@@ -192,6 +193,10 @@ func (s SrtSocket) Connect() error {
 	}
 
 	if !s.blocking {
+                if s.pd == nil {
+                    s.pd = PollDescInit(s.socket)
+                }
+
 		s.pd.SetReadDeadline(time.Now().Add(time.Duration(s.pollTimeout) * time.Millisecond))
 		if err := s.pd.Wait('w'); err != nil {
 			return err
@@ -199,7 +204,7 @@ func (s SrtSocket) Connect() error {
 		s.pd.SetReadDeadline(time.Time{})
 	}
 
-	err = s.postconfiguration(&s)
+	err = s.postconfiguration(s)
 	if err != nil {
 		return fmt.Errorf("Error setting post socket options in connect")
 	}

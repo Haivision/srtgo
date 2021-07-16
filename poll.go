@@ -88,7 +88,6 @@ func (pd *pollDesc) Close() {
 	pd.pollS.pollClose(pd)
 	//TODO: figure out a way to cleanly return these without causing any potential null pointer migrations
 	//pollDescPool.Put(pd)
-
 }
 
 func (pd *pollDesc) checkPollErr(mode int) error {
@@ -189,11 +188,11 @@ func (pd *pollDesc) reset(mode int) {
 	}
 }
 
-func PollDescInit(s *SrtSocket) *pollDesc {
+func PollDescInit(s C.SRTSOCKET) *pollDesc {
 	pd := pollDescPool.Get().(*pollDesc)
 	pd.lock.Lock()
 	defer pd.lock.Unlock()
-	pd.fd = s.socket
+	pd.fd = s
 	pd.rdState = pollDefault
 	pd.wrState = pollDefault
 	pd.pollS = pollServerH
@@ -202,10 +201,9 @@ func PollDescInit(s *SrtSocket) *pollDesc {
 	pd.rdSeq++
 	pd.wdSeq++
 	pd.pollS.pollOpen(pd)
-	runtime.SetFinalizer(s, func(obj interface{}) {
-		s := obj.(*SrtSocket)
-		s.pd.Close()
-		s.pd = nil
+	runtime.SetFinalizer(pd, func(obj interface{}) {
+		pd := obj.(*pollDesc)
+		pd.Close()
 	})
 	return pd
 }
@@ -236,12 +234,12 @@ func (p *pollServer) pollOpen(pd *pollDesc) {
 func (p *pollServer) pollClose(pd *pollDesc) {
 	fmt.Printf("Removing %d from epoll\n\n\n", pd.fd)
         //block poller
-	p.pollDescLock.Lock()
 //        C.srt_close(p.canary)
 	ret := C.srt_epoll_remove_usock(p.srtEpollDescr, pd.fd)
 	if ret == -1 {
 		panic("ERROR REMOVING FD FROM EPOLL")
 	}
+	p.pollDescLock.Lock()
 	delete(p.pollDescs, pd.fd)
 	p.pollDescLock.Unlock()
 }
