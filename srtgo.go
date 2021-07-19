@@ -108,6 +108,10 @@ func NewSrtSocket(host string, port uint16, options map[string]string) *SrtSocke
 		s.blocking = true
 	}
 
+	if !s.blocking {
+		s.pd = PollDescInit(s.socket)
+	}
+
 	var err error
 	s.mode, err = s.preconfiguration()
 	if err != nil {
@@ -164,10 +168,6 @@ func (s *SrtSocket) Listen(backlog int) error {
 		C.srt_close(s.socket)
 		return fmt.Errorf("Error in srt_listen: %w", srtGetAndClearError())
 	}
-        if !s.blocking && s.pd == nil {
-                s.pd = PollDescInit(s.socket)
-        }
-
 
 	err = s.postconfiguration(s)
 	if err != nil {
@@ -193,15 +193,9 @@ func (s *SrtSocket) Connect() error {
 	}
 
 	if !s.blocking {
-                if s.pd == nil {
-                    s.pd = PollDescInit(s.socket)
-                }
-
-		s.pd.SetReadDeadline(time.Now().Add(time.Duration(s.pollTimeout) * time.Millisecond))
 		if err := s.pd.Wait('w'); err != nil {
 			return err
 		}
-		s.pd.SetReadDeadline(time.Time{})
 	}
 
 	err = s.postconfiguration(s)
@@ -245,6 +239,18 @@ func (s SrtSocket) PollTimeout() time.Duration {
 // Only applied when socket is in non-blocking mode.
 func (s *SrtSocket) SetPollTimeout(pollTimeout time.Duration) {
 	s.pollTimeout = pollTimeout.Milliseconds()
+}
+
+func (s *SrtSocket) SetDeadline(deadline time.Time) {
+	s.pd.SetDeadline(deadline)
+}
+
+func (s *SrtSocket) SetReadDeadline(deadline time.Time) {
+	s.pd.SetReadDeadline(deadline)
+}
+
+func (s *SrtSocket) SetWriteDeadline(deadline time.Time) {
+	s.pd.SetWriteDeadline(deadline)
 }
 
 // Close the SRT socket
