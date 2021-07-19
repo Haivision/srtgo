@@ -109,7 +109,7 @@ func NewSrtSocket(host string, port uint16, options map[string]string) *SrtSocke
 	}
 
 	if !s.blocking {
-		s.pd = PollDescInit(s.socket)
+		s.pd = pollDescInit(s.socket)
 	}
 
 	var err error
@@ -134,7 +134,7 @@ func newFromSocket(acceptSocket *SrtSocket, socket C.SRTSOCKET) (*SrtSocket, err
 	}
 
 	if !s.blocking {
-		s.pd = PollDescInit(s.socket)
+		s.pd = pollDescInit(s.socket)
 	}
 
 	return s, nil
@@ -193,7 +193,7 @@ func (s *SrtSocket) Connect() error {
 	}
 
 	if !s.blocking {
-		if err := s.pd.Wait('w'); err != nil {
+		if err := s.pd.wait('w'); err != nil {
 			return err
 		}
 	}
@@ -242,15 +242,15 @@ func (s *SrtSocket) SetPollTimeout(pollTimeout time.Duration) {
 }
 
 func (s *SrtSocket) SetDeadline(deadline time.Time) {
-	s.pd.SetDeadline(deadline)
+	s.pd.setDeadline(deadline, 'r'+'w')
 }
 
 func (s *SrtSocket) SetReadDeadline(deadline time.Time) {
-	s.pd.SetReadDeadline(deadline)
+	s.pd.setDeadline(deadline, 'r')
 }
 
 func (s *SrtSocket) SetWriteDeadline(deadline time.Time) {
-	s.pd.SetWriteDeadline(deadline)
+	s.pd.setDeadline(deadline, 'w')
 }
 
 // Close the SRT socket
@@ -258,7 +258,7 @@ func (s *SrtSocket) Close() {
 
 	C.srt_close(s.socket)
 	if !s.blocking {
-		s.pd.Close()
+		s.pd.close()
 	}
 	callbackMutex.Lock()
 	if ptr, exists := listenCallbackMap[s.socket]; exists {
