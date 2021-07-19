@@ -53,8 +53,8 @@ func (p *pollServer) pollOpen(pd *pollDesc) {
 
 func (p *pollServer) pollClose(pd *pollDesc) {
 	sockstate := C.srt_getsockstate(pd.fd)
-	//Broken sockets get removed internally by SRT lib
-	if sockstate == C.SRTS_BROKEN {
+	//Broken/closed sockets get removed internally by SRT lib
+	if sockstate == C.SRTS_BROKEN || sockstate == C.SRTS_CLOSING || sockstate == C.SRTS_CLOSED || sockstate == C.SRTS_NONEXIST {
 		return
 	}
 	ret := C.srt_epoll_remove_usock(p.srtEpollDescr, pd.fd)

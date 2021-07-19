@@ -114,7 +114,6 @@ func (pd *pollDesc) checkPollErr(mode int) error {
 	}
 
 	if pd.pollErr {
-		pd.pollErr = false //Consume the error
 		return &SrtSocketClosed{}
 	}
 
