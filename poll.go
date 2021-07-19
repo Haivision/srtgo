@@ -304,6 +304,7 @@ func (p *pollServer) run() {
 				if events&C.SRT_EPOLL_ERR != 0 {
 					pd.unblock('r', true, false)
 					pd.unblock('w', true, false)
+					p.pollDescLock.Unlock()
 					continue
 				}
 				if events&C.SRT_EPOLL_IN != 0 {
