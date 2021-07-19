@@ -178,6 +178,8 @@ func (s SrtSocket) GetSocket() C.int {
 // may be allowed to wait until they are accepted (excessive connection requests
 // are rejected in advance)
 func (s SrtSocket) Listen(backlog int) error {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
 	nbacklog := C.int(backlog)
 
 	sa, salen, err := CreateAddrInet(s.host, s.port)
@@ -188,13 +190,13 @@ func (s SrtSocket) Listen(backlog int) error {
 	res := C.srt_bind(s.socket, sa, C.int(salen))
 	if res == SRT_ERROR {
 		C.srt_close(s.socket)
-		return fmt.Errorf("Error in srt_bind: %v", C.GoString(C.srt_getlasterror_str()))
+		return fmt.Errorf("Error in srt_bind: %w", srtGetAndClearError())
 	}
 
 	res = C.srt_listen(s.socket, nbacklog)
 	if res == SRT_ERROR {
 		C.srt_close(s.socket)
-		return fmt.Errorf("Error in srt_listen: %v", C.GoString(C.srt_getlasterror_str()))
+		return fmt.Errorf("Error in srt_listen: %w", srtGetAndClearError())
 	}
 
 	err = s.postconfiguration(&s)
@@ -207,6 +209,8 @@ func (s SrtSocket) Listen(backlog int) error {
 
 // Accept an incoming connection
 func (s SrtSocket) Accept() (*SrtSocket, *net.UDPAddr, error) {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
 	if !s.blocking {
 		// Socket readiness for accept is checked by polling on SRT_EPOLL_IN
 		timeoutMs := C.int64_t(s.pollTimeout)
@@ -214,13 +218,13 @@ func (s SrtSocket) Accept() (*SrtSocket, *net.UDPAddr, error) {
 		len := C.int(1)
 		res := C.srt_epoll_uwait(s.epollIn, &fds[0], len, timeoutMs)
 		if res == 0 {
-			return nil, nil, &SrtEpollTimeout{}
+			return nil, nil, srtGetAndClearError()
 		}
 		if res == SRT_ERROR {
 			return nil, nil, fmt.Errorf("srt accept, epoll error: %s", C.GoString(C.srt_getlasterror_str()))
 		}
 		if fds[0].events&C.SRT_EPOLL_ERR > 0 {
-			return nil, nil, &SrtSocketClosed{}
+			return nil, nil, srtGetAndClearError()
 		}
 	}
 
@@ -228,7 +232,7 @@ func (s SrtSocket) Accept() (*SrtSocket, *net.UDPAddr, error) {
 	sclen := C.int(syscall.SizeofSockaddrAny)
 	socket := C.srt_accept(s.socket, (*C.struct_sockaddr)(unsafe.Pointer(&addr)), &sclen)
 	if socket == SRT_INVALID_SOCK {
-		return nil, nil, fmt.Errorf("srt accept, error accepting the connection: %s", C.GoString(C.srt_getlasterror_str()))
+		return nil, nil, fmt.Errorf("srt accept, error accepting the connection: %w", srtGetAndClearError())
 	}
 
 	newSocket, err := newFromSocket(&s, socket)
@@ -244,41 +248,20 @@ func (s SrtSocket) Accept() (*SrtSocket, *net.UDPAddr, error) {
 	return newSocket, udpAddr, nil
 }
 
-func errcodeToError(errorcode C.int) error {
-	switch errorcode {
-	case C.SRT_EINVSOCK:
-		return &SrtInvalidSock{}
-	case C.SRT_ERDVUNBOUND:
-		return &SrtRendezvousUnbound{}
-	case C.SRT_ECONNSOCK:
-		return &SrtSockConnected{}
-	case C.SRT_ECONNREJ:
-		return &SrtConnectionRejected{}
-	case C.SRT_ENOSERVER:
-		return &SrtConnectTimeout{}
-	case C.SRT_ESCLOSED:
-		return &SrtSocketClosed{}
-	default:
-		return fmt.Errorf("unknown error")
-	}
-}
-
 // Connect to a remote endpoint
 func (s SrtSocket) Connect() error {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
 	sa, salen, err := CreateAddrInet(s.host, s.port)
 	if err != nil {
 		return err
 	}
 
-	runtime.LockOSThread()
 	res := C.srt_connect(s.socket, sa, C.int(salen))
 	if res == SRT_ERROR {
 		C.srt_close(s.socket)
-		srt_errno := C.srt_getlasterror(nil)
-		runtime.UnlockOSThread()
-		return errcodeToError(srt_errno)
+		return srtGetAndClearError()
 	}
-	runtime.UnlockOSThread()
 
 	if !s.blocking {
 		// Socket readiness for connection is checked by polling SRT_EPOLL_OUT.
@@ -294,7 +277,7 @@ func (s SrtSocket) Connect() error {
 			if state != C.SRTS_CONNECTED {
 				return fmt.Errorf("srt connect, connection failed %d", state)
 			}
-			return fmt.Errorf("srt connect, epoll error: %s", C.GoString(C.srt_getlasterror_str()))
+			return fmt.Errorf("srt connect, epoll error: %w", srtGetAndClearError())
 		}
 		if fds[0].events&C.SRT_EPOLL_ERR > 0 {
 			return &SrtSocketClosed{}
@@ -311,6 +294,8 @@ func (s SrtSocket) Connect() error {
 
 // Read data from the SRT socket
 func (s SrtSocket) Read(b []byte) (n int, err error) {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
 	if !s.blocking {
 		timeoutMs := C.int64_t(s.pollTimeout)
 		fds := [1]C.SRT_EPOLL_EVENT{}
@@ -320,16 +305,16 @@ func (s SrtSocket) Read(b []byte) (n int, err error) {
 			return 0, &SrtEpollTimeout{}
 		}
 		if res == SRT_ERROR {
-			return 0, fmt.Errorf("error in read:epoll %s", C.GoString(C.srt_getlasterror_str()))
+			return 0, fmt.Errorf("error in read:epoll %w", srtGetAndClearError())
 		}
 		if fds[0].events&C.SRT_EPOLL_ERR > 0 {
-			return 0, &SrtSocketClosed{}
+			return 0, srtGetAndClearError()
 		}
 	}
 
 	res := C.srt_recvmsg2(s.socket, (*C.char)(unsafe.Pointer(&b[0])), C.int(len(b)), nil)
 	if res == SRT_ERROR {
-		return 0, fmt.Errorf("error in read::recv %s", C.GoString(C.srt_getlasterror_str()))
+		return 0, fmt.Errorf("error in read:srt_recvmsg2 %w", srtGetAndClearError())
 	}
 
 	return int(res), nil
@@ -337,6 +322,8 @@ func (s SrtSocket) Read(b []byte) (n int, err error) {
 
 // Write data to the SRT socket
 func (s SrtSocket) Write(b []byte) (n int, err error) {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
 	if !s.blocking {
 		timeoutMs := C.int64_t(s.pollTimeout)
 		fds := [1]C.SRT_EPOLL_EVENT{}
@@ -346,7 +333,7 @@ func (s SrtSocket) Write(b []byte) (n int, err error) {
 			return 0, &SrtEpollTimeout{}
 		}
 		if res == SRT_ERROR {
-			return 0, fmt.Errorf("error in write:epoll %s", C.GoString(C.srt_getlasterror_str()))
+			return 0, fmt.Errorf("error in write:epoll %w", srtGetAndClearError())
 		}
 		if fds[0].events&C.SRT_EPOLL_ERR > 0 {
 			return 0, &SrtSocketClosed{}
@@ -355,7 +342,7 @@ func (s SrtSocket) Write(b []byte) (n int, err error) {
 
 	res := C.srt_sendmsg2(s.socket, (*C.char)(unsafe.Pointer(&b[0])), C.int(len(b)), nil)
 	if res == SRT_ERROR {
-		return 0, fmt.Errorf("error in write:srt_sendmsg2 %s", C.GoString(C.srt_getlasterror_str()))
+		return 0, fmt.Errorf("error in write:srt_sendmsg2 %w", srtGetAndClearError())
 	}
 
 	return int(res), nil
@@ -363,10 +350,12 @@ func (s SrtSocket) Write(b []byte) (n int, err error) {
 
 // Stats - Retrieve stats from the SRT socket
 func (s SrtSocket) Stats() (*SrtStats, error) {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
 	var stats C.SRT_TRACEBSTATS = C.SRT_TRACEBSTATS{}
 	var b C.int = 1
 	if C.srt_bstats(s.socket, &stats, b) == SRT_ERROR {
-		return nil, fmt.Errorf("Error getting stats, %s", C.GoString(C.srt_getlasterror_str()))
+		return nil, fmt.Errorf("Error getting stats, %w", srtGetAndClearError())
 	}
 
 	return newSrtStats(&stats), nil
@@ -461,7 +450,7 @@ func srtConnectCBWrapper(arg unsafe.Pointer, socket C.SRTSOCKET, errcode C.int, 
 	s.socket = socket
 	udpAddr, _ := udpAddrFromSockaddr((*syscall.RawSockaddrAny)(unsafe.Pointer(peeraddr)))
 
-	userCB(s, errcodeToError(errcode), udpAddr, int(token))
+	userCB(s, SRTErrno(errcode), udpAddr, int(token))
 }
 
 // SetConnectCallback - set a function to be called after a socket or connection in a group has failed
@@ -599,24 +588,29 @@ func (s SrtSocket) SetSockOptString(opt int, value string) error {
 }
 
 func (s SrtSocket) setSockOpt(opt int, data unsafe.Pointer, size int) error {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
 	res := C.srt_setsockopt(s.socket, 0, C.SRT_SOCKOPT(opt), data, C.int(size))
 	if res == -1 {
-		return fmt.Errorf("Error calling srt_setsockopt %v", C.GoString(C.srt_getlasterror_str()))
+		return fmt.Errorf("Error calling srt_setsockopt %w", srtGetAndClearError())
 	}
-
 	return nil
 }
 
 func (s SrtSocket) getSockOpt(opt int, data unsafe.Pointer, size *int) error {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
 	res := C.srt_getsockopt(s.socket, 0, C.SRT_SOCKOPT(opt), data, (*C.int)(unsafe.Pointer(size)))
 	if res == -1 {
-		return fmt.Errorf("Error calling srt_getsockopt %v", C.GoString(C.srt_getlasterror_str()))
+		return fmt.Errorf("Error calling srt_getsockopt %w", srtGetAndClearError())
 	}
 
 	return nil
 }
 
 func (s SrtSocket) preconfiguration() (int, error) {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
 	var blocking C.int
 	if s.blocking {
 		blocking = C.int(1)
@@ -625,7 +619,7 @@ func (s SrtSocket) preconfiguration() (int, error) {
 	}
 	result := C.srt_setsockopt(s.socket, 0, C.SRTO_RCVSYN, unsafe.Pointer(&blocking), C.int(unsafe.Sizeof(blocking)))
 	if result == -1 {
-		return ModeFailure, fmt.Errorf("could not set SRTO_RCVSYN flag")
+		return ModeFailure, fmt.Errorf("could not set SRTO_RCVSYN flag: %w", srtGetAndClearError())
 	}
 
 	var mode int
@@ -656,21 +650,25 @@ func (s SrtSocket) preconfiguration() (int, error) {
 	if linger, ok := s.options["linger"]; ok {
 		li, err := strconv.Atoi(linger)
 		if err == nil {
-			setSocketLingerOption(s.socket, int32(li))
+			if err := setSocketLingerOption(s.socket, int32(li)); err != nil {
+				return ModeFailure, fmt.Errorf("could not set LINGER option %w", err)
+			}
 		} else {
-			return ModeFailure, fmt.Errorf("could not set LINGER option")
+			return ModeFailure, fmt.Errorf("could not set LINGER option %w", err)
 		}
 	}
 
 	err := setSocketOptions(s.socket, bindingPre, s.options)
 	if err != nil {
-		return ModeFailure, fmt.Errorf("Error setting socket options")
+		return ModeFailure, fmt.Errorf("Error setting socket options: %w", err)
 	}
 
 	return mode, nil
 }
 
 func (s SrtSocket) postconfiguration(sck *SrtSocket) error {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
 	var blocking C.int
 	if s.blocking {
 		blocking = 1
@@ -680,12 +678,12 @@ func (s SrtSocket) postconfiguration(sck *SrtSocket) error {
 
 	res := C.srt_setsockopt(sck.socket, 0, C.SRTO_SNDSYN, unsafe.Pointer(&blocking), C.int(unsafe.Sizeof(blocking)))
 	if res == -1 {
-		return fmt.Errorf("Error in postconfiguration setting SRTO_SNDSYN")
+		return fmt.Errorf("Error in postconfiguration setting SRTO_SNDSYN: %w", srtGetAndClearError())
 	}
 
 	res = C.srt_setsockopt(sck.socket, 0, C.SRTO_RCVSYN, unsafe.Pointer(&blocking), C.int(unsafe.Sizeof(blocking)))
 	if res == -1 {
-		return fmt.Errorf("Error in postconfiguration setting SRTO_RCVSYN")
+		return fmt.Errorf("Error in postconfiguration setting SRTO_RCVSYN: %w", srtGetAndClearError())
 	}
 
 	err := setSocketOptions(sck.socket, bindingPost, s.options)

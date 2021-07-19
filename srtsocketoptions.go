@@ -5,7 +5,7 @@ package srtgo
 import "C"
 
 import (
-	"log"
+	"fmt"
 	"strconv"
 	"syscall"
 	"unsafe"
@@ -54,7 +54,7 @@ const (
 	SRTO_ENFORCEDENCRYPTION = C.SRTO_ENFORCEDENCRYPTION
 	SRTO_PEERIDLETIMEO      = C.SRTO_PEERIDLETIMEO
 	SRTO_PACKETFILTER       = C.SRTO_PACKETFILTER
-	SRTO_STATE		= C.SRTO_STATE
+	SRTO_STATE              = C.SRTO_STATE
 )
 
 type socketOption struct {
@@ -123,7 +123,7 @@ func setSocketOptions(s C.int, binding int, options map[string]string) error {
 					if err == nil {
 						result := C.srt_setsockflag(s, C.SRT_SOCKOPT(so.option), unsafe.Pointer(&v32), C.int32_t(unsafe.Sizeof(v32)))
 						if result == -1 {
-							log.Printf("Warning - Error setting option %s to %s, %v", so.name, val, C.GoString(C.srt_getlasterror_str()))
+							return fmt.Errorf("warning - error setting option %s to %s, %w", so.name, val, srtGetAndClearError())
 						}
 					}
 				} else if so.dataType == tInteger64 {
@@ -131,7 +131,7 @@ func setSocketOptions(s C.int, binding int, options map[string]string) error {
 					if err == nil {
 						result := C.srt_setsockflag(s, C.SRT_SOCKOPT(so.option), unsafe.Pointer(&v), C.int32_t(unsafe.Sizeof(v)))
 						if result == -1 {
-							log.Printf("Warning - Error setting option %s to %s, %v", so.name, val, C.GoString(C.srt_getlasterror_str()))
+							return fmt.Errorf("warning - error setting option %s to %s, %w", so.name, val, srtGetAndClearError())
 						}
 					}
 				} else if so.dataType == tString {
@@ -139,7 +139,7 @@ func setSocketOptions(s C.int, binding int, options map[string]string) error {
 					defer C.free(unsafe.Pointer(sval))
 					result := C.srt_setsockflag(s, C.SRT_SOCKOPT(so.option), unsafe.Pointer(sval), C.int32_t(len(val)))
 					if result == -1 {
-						log.Printf("Warning - Error setting option %s to %s, %v", so.name, val, C.GoString(C.srt_getlasterror_str()))
+						return fmt.Errorf("warning - error setting option %s to %s, %w", so.name, val, srtGetAndClearError())
 					}
 
 				} else if so.dataType == tBoolean {
@@ -152,7 +152,7 @@ func setSocketOptions(s C.int, binding int, options map[string]string) error {
 						result = C.srt_setsockflag(s, C.SRT_SOCKOPT(so.option), unsafe.Pointer(&v), C.int32_t(unsafe.Sizeof(v)))
 					}
 					if result == -1 {
-						log.Printf("Warning - Error setting option %s to %s, %v", so.name, val, C.GoString(C.srt_getlasterror_str()))
+						return fmt.Errorf("warning - error setting option %s to %s, %w", so.name, val, srtGetAndClearError())
 					}
 				} else if so.dataType == tTransType {
 					var result C.int
@@ -164,7 +164,7 @@ func setSocketOptions(s C.int, binding int, options map[string]string) error {
 						result = C.srt_setsockflag(s, C.SRT_SOCKOPT(so.option), unsafe.Pointer(&v), C.int32_t(unsafe.Sizeof(v)))
 					}
 					if result == -1 {
-						log.Printf("Warning - Error setting option %s to %s: %v", so.name, val, C.GoString(C.srt_getlasterror_str()))
+						return fmt.Errorf("warning - error setting option %s to %s: %w", so.name, val, srtGetAndClearError())
 					}
 				}
 			}
