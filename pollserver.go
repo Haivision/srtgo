@@ -52,6 +52,11 @@ func (p *pollServer) pollOpen(pd *pollDesc) {
 }
 
 func (p *pollServer) pollClose(pd *pollDesc) {
+	sockstate := C.srt_getsockstate(pd.fd)
+	//Broken sockets get removed internally by SRT lib
+	if sockstate == C.SRTS_BROKEN {
+		return
+	}
 	ret := C.srt_epoll_remove_usock(p.srtEpollDescr, pd.fd)
 	if ret == -1 {
 		panic("ERROR REMOVING FD FROM EPOLL")
