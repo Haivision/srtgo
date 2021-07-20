@@ -195,7 +195,13 @@ func (pd *pollDesc) unblock(mode int, pollerr, ioready bool) {
 		atomic.StoreInt32(state, pollReady)
 	}
 	if old == pollWait {
-		unblockChan <- struct{}{}
+                //make sure we never block here
+                select {
+		case unblockChan <- struct{}{}:
+                    //
+                default:
+                    //
+                }
 	}
 }
 
