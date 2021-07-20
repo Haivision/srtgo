@@ -38,9 +38,12 @@ func srtAcceptImpl(lsn C.SRTSOCKET, addr *C.struct_sockaddr, addrlen *C.int) (C.
 
 // Accept an incoming connection
 func (s SrtSocket) Accept() (*SrtSocket, *net.UDPAddr, error) {
-	err := s.pd.wait('r')
-	if err != nil {
-		return nil, nil, err
+	var err error
+	if !s.blocking {
+		err = s.pd.wait('r')
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 	var addr syscall.RawSockaddrAny
 	sclen := C.int(syscall.SizeofSockaddrAny)
