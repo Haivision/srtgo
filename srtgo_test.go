@@ -31,7 +31,16 @@ func TestNewSocketLinger(t *testing.T) {
 	a := NewSrtSocket("localhost", 8090, options)
 
 	if a == nil {
-		t.Error("Could not create a srt socket")
+		t.Error("Could not create a srt socket with linger")
+	}
+
+	// read back value to make sure
+	res, err := getSocketLingerOption(a)
+	if err != nil {
+		t.Error(err)
+	}
+	if res != 1000 {
+		t.Error("Failed to set linger option")
 	}
 }
 
