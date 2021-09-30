@@ -1,10 +1,11 @@
-// build windows
+//go:build windows
 
 package srtgo
 
 import (
-	"golang.org/x/sys/windows"
 	"unsafe"
+
+	"golang.org/x/sys/windows"
 )
 
 const (
@@ -13,16 +14,16 @@ const (
 )
 
 var (
-	sizeofSockAddrInet4 = 0
-	sizeofSockAddrInet6 = 0
-	sizeofSockaddrAny   = 0
+	sizeofSockAddrInet4 uint64 = 0
+	sizeofSockAddrInet6 uint64 = 0
+	sizeofSockaddrAny   uint64 = 0
 )
 
 func init() {
-	var inet4 windows.RawSockaddrInet4
-	var inet6 windows.RawSockaddrInet6
-	var any windows.RawSockaddrAny
-	sizeofSockAddrInet4 = unsafe.Sizeof(inet4)
-	sizeofSockAddrInet6 = unsafe.Sizeof(inet6)
-	sizeofSockaddrAny = unsafe.Sizeof(any)
+	inet4 := windows.RawSockaddrInet4{}
+	inet6 := windows.RawSockaddrInet6{}
+	any := windows.RawSockaddrAny{}
+	sizeofSockAddrInet4 = uint64(unsafe.Sizeof(inet4))
+	sizeofSockAddrInet6 = uint64(unsafe.Sizeof(inet6))
+	sizeofSockaddrAny = uint64(unsafe.Sizeof(any))
 }
