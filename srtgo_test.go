@@ -1,10 +1,19 @@
 package srtgo
 
 import (
+	"math/rand"
 	"sync"
 	"testing"
 	"time"
 )
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
+
+func randomPort() uint16 {
+	return uint16(rand.Intn(32768-1024) + 1024)
+}
 
 func TestNewSocket(t *testing.T) {
 	options := make(map[string]string)
