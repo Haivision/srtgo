@@ -1,6 +1,6 @@
 package srtgo
 
-// #include <srt/srt.h>
+//#include <srt/srt.h>
 import "C"
 
 import (
@@ -9,8 +9,6 @@ import (
 	"net"
 	"syscall"
 	"unsafe"
-
-	"golang.org/x/sys/unix"
 )
 
 func ntohs(val uint16) uint16 {
@@ -22,12 +20,12 @@ func udpAddrFromSockaddr(addr *syscall.RawSockaddrAny) (*net.UDPAddr, error) {
 	var udpAddr net.UDPAddr
 
 	switch addr.Addr.Family {
-	case unix.AF_INET6:
+	case afINET6:
 		ptr := (*syscall.RawSockaddrInet6)(unsafe.Pointer(addr))
 		udpAddr.Port = int(ntohs(ptr.Port))
 		udpAddr.IP = ptr.Addr[:]
 
-	case unix.AF_INET:
+	case afINET4:
 		ptr := (*syscall.RawSockaddrInet4)(unsafe.Pointer(addr))
 		udpAddr.Port = int(ntohs(ptr.Port))
 		udpAddr.IP = net.IPv4(
@@ -45,7 +43,7 @@ func udpAddrFromSockaddr(addr *syscall.RawSockaddrAny) (*net.UDPAddr, error) {
 
 func sockAddrFromIp4(ip net.IP, port uint16) (*C.struct_sockaddr, int, error) {
 	var raw syscall.RawSockaddrInet4
-	raw.Family = syscall.AF_INET
+	raw.Family = afINET4
 
 	p := (*[2]byte)(unsafe.Pointer(&raw.Port))
 	p[0] = byte(port >> 8)
@@ -53,12 +51,12 @@ func sockAddrFromIp4(ip net.IP, port uint16) (*C.struct_sockaddr, int, error) {
 
 	copy(raw.Addr[:], ip.To4())
 
-	return (*C.struct_sockaddr)(unsafe.Pointer(&raw)), int(syscall.SizeofSockaddrInet4), nil
+	return (*C.struct_sockaddr)(unsafe.Pointer(&raw)), int(sizeofSockAddrInet4), nil
 }
 
 func sockAddrFromIp6(ip net.IP, port uint16) (*C.struct_sockaddr, int, error) {
 	var raw syscall.RawSockaddrInet6
-	raw.Family = syscall.AF_INET6
+	raw.Family = afINET6
 
 	p := (*[2]byte)(unsafe.Pointer(&raw.Port))
 	p[0] = byte(port >> 8)
@@ -66,7 +64,7 @@ func sockAddrFromIp6(ip net.IP, port uint16) (*C.struct_sockaddr, int, error) {
 
 	copy(raw.Addr[:], ip.To16())
 
-	return (*C.struct_sockaddr)(unsafe.Pointer(&raw)), int(syscall.SizeofSockaddrInet6), nil
+	return (*C.struct_sockaddr)(unsafe.Pointer(&raw)), int(sizeofSockAddrInet6), nil
 }
 
 func CreateAddrInet(name string, port uint16) (*C.struct_sockaddr, int, error) {

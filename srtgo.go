@@ -229,7 +229,7 @@ func (s SrtSocket) Accept() (*SrtSocket, *net.UDPAddr, error) {
 	}
 
 	var addr syscall.RawSockaddrAny
-	sclen := C.int(syscall.SizeofSockaddrAny)
+	sclen := C.int(sizeofSockaddrAny)
 	socket := C.srt_accept(s.socket, (*C.struct_sockaddr)(unsafe.Pointer(&addr)), &sclen)
 	if socket == SRT_INVALID_SOCK {
 		return nil, nil, fmt.Errorf("srt accept, error accepting the connection: %w", srtGetAndClearError())
