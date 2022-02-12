@@ -2,10 +2,9 @@ package srtgo
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"testing"
-
-	"github.com/pkg/errors"
 )
 
 type tester struct {
@@ -21,7 +20,7 @@ func (t *tester) send(port uint16) {
 	buf := make([]byte, 1316)
 	sock := NewSrtSocket("127.0.0.1", port, map[string]string{"blocking": t.blocking, "mode": "caller", "transtype": "file"})
 	if sock == nil {
-		t.err <- errors.New("failed to create caller socket")
+		t.err <- fmt.Errorf("failed to create caller socket")
 		return
 	}
 	defer sock.Close()
@@ -32,7 +31,7 @@ func (t *tester) send(port uint16) {
 
 	err := sock.Connect()
 	if err != nil {
-		t.err <- errors.Wrap(err, "connect")
+		t.err <- fmt.Errorf("connect: %v", err)
 		return
 	}
 	for {
@@ -43,7 +42,7 @@ func (t *tester) send(port uint16) {
 		}
 		_, err := sock.Write(buf)
 		if err != nil {
-			t.err <- errors.Wrap(err, "write")
+			t.err <- fmt.Errorf("write: %v", err)
 			return
 		}
 	}
@@ -53,7 +52,7 @@ func (t *tester) send(port uint16) {
 func (t *tester) receive(port uint16, iterations int) {
 	sock := NewSrtSocket("127.0.0.1", port, map[string]string{"blocking": t.blocking, "mode": "listener", "rcvbuf": "22937600", "transtype": "file"})
 	if sock == nil {
-		t.err <- errors.New("failed to create listener socket")
+		t.err <- fmt.Errorf("failed to create listener socket")
 		return
 	}
 	buf := make([]byte, 1316)
@@ -66,18 +65,18 @@ func (t *tester) receive(port uint16, iterations int) {
 
 	err := sock.Listen(1)
 	if err != nil {
-		t.err <- errors.Wrap(err, "listen")
+		t.err <- fmt.Errorf("listen: %v", err)
 		return
 	}
 	remote, _, err := sock.Accept()
 	if err != nil {
-		t.err <- errors.Wrap(err, "accept")
+		t.err <- fmt.Errorf("accept: %v", err)
 		return
 	}
 	for i := 0; i < iterations; i++ {
 		_, err := remote.Read(buf)
 		if err != nil {
-			t.err <- errors.Wrap(err, "read")
+			t.err <- fmt.Errorf("read: %v", err)
 			return
 		}
 	}
