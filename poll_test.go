@@ -7,7 +7,7 @@ import (
 func connectLoop(port uint16, blocking string, semChan chan struct{}) {
 	for {
 		//fmt.Printf("Connecting\n")
-		s := NewSrtSocket("127.0.0.1", port, map[string]string{"blocking": "0", "mode": "caller"})
+		s := NewSrtSocket("127.0.0.1", port, map[string]string{"blocking": blocking, "mode": "caller"})
 		err := s.Connect()
 		if err != nil {
 			continue
@@ -31,7 +31,7 @@ start:
 		goto start
 	}
 	semChan := make(chan struct{}, 8)
-	go connectLoop(port, "0", semChan)
+	go connectLoop(port, blocking, semChan)
 	semChan <- struct{}{}
 	semChan <- struct{}{}
 	for i := 0; i < N; i++ {
