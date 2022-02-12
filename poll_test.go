@@ -1,18 +1,8 @@
 package srtgo
 
 import (
-	"math/rand"
 	"testing"
-	"time"
 )
-
-func init() {
-	rand.Seed(time.Now().UnixNano())
-}
-
-func randomPort() uint16 {
-	return uint16(rand.Intn(32768-1024) + 1024)
-}
 
 func connectLoop(port uint16, blocking string, semChan chan struct{}) {
 	for {
