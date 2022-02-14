@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sync"
 	"testing"
+	"time"
 )
 
 type tester struct {
@@ -18,7 +19,7 @@ type tester struct {
 // Creates a connector socket and keeps writing to it
 func (t *tester) send(port uint16) {
 	buf := make([]byte, 1316)
-	sock := NewSrtSocket("127.0.0.1", port, map[string]string{"blocking": t.blocking, "mode": "caller", "transtype": "file"})
+	sock := NewSrtSocket("127.0.0.1", port, map[string]string{"blocking": t.blocking, "mode": "caller", "transtype": "file", "latency": "300"})
 	if sock == nil {
 		t.err <- fmt.Errorf("failed to create caller socket")
 		return
@@ -45,12 +46,13 @@ func (t *tester) send(port uint16) {
 			t.err <- fmt.Errorf("write: %v", err)
 			return
 		}
+		time.Sleep(1 * time.Millisecond) // 1316 bytes every 1 ms = 1310 KB/s
 	}
 }
 
 // Creates a listener socket and keeps reading from it
 func (t *tester) receive(port uint16, iterations int) {
-	sock := NewSrtSocket("127.0.0.1", port, map[string]string{"blocking": t.blocking, "mode": "listener", "rcvbuf": "22937600", "transtype": "file"})
+	sock := NewSrtSocket("127.0.0.1", port, map[string]string{"blocking": t.blocking, "mode": "listener", "rcvbuf": "22937600", "transtype": "file", "latency": "300"})
 	if sock == nil {
 		t.err <- fmt.Errorf("failed to create listener socket")
 		return

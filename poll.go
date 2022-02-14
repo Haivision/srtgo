@@ -59,8 +59,8 @@ type pollDesc struct {
 var pdPool = sync.Pool{
 	New: func() interface{} {
 		return &pollDesc{
-			unblockRd: make(chan interface{}),
-			unblockWr: make(chan interface{}),
+			unblockRd: make(chan interface{}, 1),
+			unblockWr: make(chan interface{}, 1),
 			rdTimer:   time.NewTimer(0),
 			wdTimer:   time.NewTimer(0),
 		}
@@ -102,16 +102,13 @@ func (pd *pollDesc) wait(mode PollMode) error {
 	unblockChan := pd.unblockRd
 	expiryChan := pd.rdTimer.C
 	timerSeq := int64(0)
+	pd.lock.Lock()
 	if mode == ModeRead {
-		pd.lock.Lock()
 		timerSeq = pd.rtSeq
-		pd.lock.Unlock()
 		pd.rdLock.Lock()
 		defer pd.rdLock.Unlock()
 	} else if mode == ModeWrite {
-		pd.lock.Lock()
 		timerSeq = pd.wtSeq
-		pd.lock.Unlock()
 		state = &pd.wrState
 		unblockChan = pd.unblockWr
 		expiryChan = pd.rdTimer.C
@@ -123,12 +120,14 @@ func (pd *pollDesc) wait(mode PollMode) error {
 		old := *state
 		if old == pollReady {
 			*state = pollDefault
+			pd.lock.Unlock()
 			return nil
 		}
 		if atomic.CompareAndSwapInt32(state, pollDefault, pollWait) {
 			break
 		}
 	}
+	pd.lock.Unlock()
 
 wait:
 	for {
@@ -240,10 +239,12 @@ func (pd *pollDesc) unblock(mode PollMode, pollerr, ioready bool) {
 		state = &pd.wrState
 		unblockChan = pd.unblockWr
 	}
+	pd.lock.Lock()
 	old := atomic.LoadInt32(state)
 	if ioready {
 		atomic.StoreInt32(state, pollReady)
 	}
+	pd.lock.Unlock()
 	if old == pollWait {
 		//make sure we never block here
 		select {
