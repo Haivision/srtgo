@@ -111,7 +111,7 @@ func (pd *pollDesc) wait(mode PollMode) error {
 		timerSeq = pd.wtSeq
 		state = &pd.wrState
 		unblockChan = pd.unblockWr
-		expiryChan = pd.rdTimer.C
+		expiryChan = pd.wdTimer.C
 		pd.wrLock.Lock()
 		defer pd.wrLock.Unlock()
 	}
