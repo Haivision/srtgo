@@ -31,6 +31,7 @@ func srtRecvMsg2Impl(u C.SRTSOCKET, buf []byte, msgctrl *C.SRT_MSGCTRL) (n int, 
 			srterror.wrapSysErr(syscall.Errno(syserr))
 		}
 		err = srterror
+		n = 0
 	}
 	return
 }
