@@ -55,6 +55,7 @@ const (
 	SRTO_ENFORCEDENCRYPTION = C.SRTO_ENFORCEDENCRYPTION
 	SRTO_PEERIDLETIMEO      = C.SRTO_PEERIDLETIMEO
 	SRTO_PACKETFILTER       = C.SRTO_PACKETFILTER
+	SRTO_RETRANSMITALGO     = C.SRTO_RETRANSMITALGO
 	SRTO_STATE              = C.SRTO_STATE
 )
 
@@ -99,6 +100,7 @@ var SocketOptions = []socketOption{
 	{"enforcedencryption", 0, SRTO_ENFORCEDENCRYPTION, bindingPre, tBoolean},
 	{"peeridletimeo", 0, SRTO_PEERIDLETIMEO, bindingPre, tInteger32},
 	{"packetfilter", 0, SRTO_PACKETFILTER, bindingPre, tString},
+	{"retransmitalgo", 0, SRTO_RETRANSMITALGO, bindingPre, tBoolean},
 }
 
 func setSocketLingerOption(s C.int, li int32) error {
