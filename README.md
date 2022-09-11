@@ -61,3 +61,9 @@ func main() {
 You can find detailed instructions about how to install srtlib in its [README file](https://github.com/Haivision/srt#requirements)
 
 gosrt has been developed with srt 1.4.1 as its main target and has been successfully tested in srt 1.3.4 and above.
+
+# Alternate `srt` GO packages
+
+Although `srtgo` is the official `srt` GO bindings, here's a list of alternate `srt` GO packages:
+
+- [astisrt](https://github.com/asticode/go-astisrt)
