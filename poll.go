@@ -61,8 +61,8 @@ var pdPool = sync.Pool{
 		return &pollDesc{
 			unblockRd: make(chan interface{}, 1),
 			unblockWr: make(chan interface{}, 1),
-			rdTimer:   time.NewTimer(0),
-			wdTimer:   time.NewTimer(0),
+			rdTimer:   time.NewTimer(time.Duration(1<<63 - 1)),
+			wdTimer:   time.NewTimer(time.Duration(1<<63 - 1)),
 		}
 	},
 }
