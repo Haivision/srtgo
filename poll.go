@@ -58,12 +58,16 @@ type pollDesc struct {
 
 var pdPool = sync.Pool{
 	New: func() interface{} {
-		return &pollDesc{
+		desc := &pollDesc{
 			unblockRd: make(chan interface{}, 1),
 			unblockWr: make(chan interface{}, 1),
 			rdTimer:   time.NewTimer(0),
 			wdTimer:   time.NewTimer(0),
 		}
+		// creating timer with 0 duration makes it fire right away.  Read the channel to prevent a false fire later
+		<-desc.rdTimer.C
+		<-desc.wdTimer.C
+		return desc
 	},
 }
 
@@ -200,8 +204,8 @@ func (pd *pollDesc) setDeadline(t time.Time, mode PollMode) {
 	if mode == ModeRead || mode == ModeRead+ModeWrite {
 		pd.rdSeq++
 		pd.rtSeq = pd.rdSeq
-		if pd.rdDeadline > 0 {
-			pd.rdTimer.Stop()
+		if pd.rdDeadline > 0 && !pd.rdTimer.Stop() {
+			<-pd.rdTimer.C
 		}
 		pd.rdDeadline = d
 		if d > 0 {
@@ -214,8 +218,8 @@ func (pd *pollDesc) setDeadline(t time.Time, mode PollMode) {
 	if mode == ModeWrite || mode == ModeRead+ModeWrite {
 		pd.wdSeq++
 		pd.wtSeq = pd.wdSeq
-		if pd.wdDeadline > 0 {
-			pd.wdTimer.Stop()
+		if pd.wdDeadline > 0 && !pd.wdTimer.Stop() {
+			<-pd.wdTimer.C
 		}
 		pd.wdDeadline = d
 		if d > 0 {
