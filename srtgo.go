@@ -279,6 +279,7 @@ func (s *SrtSocket) SetWriteDeadline(deadline time.Time) {
 func (s *SrtSocket) Close() {
 
 	C.srt_close(s.socket)
+	s.socket = SRT_INVALID_SOCK
 	if !s.blocking {
 		s.pd.close()
 	}
