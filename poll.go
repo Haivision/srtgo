@@ -257,6 +257,8 @@ func (pd *pollDesc) unblock(mode PollMode, pollerr, ioready bool) {
 }
 
 func (pd *pollDesc) reset(mode PollMode) {
+	pd.lock.Lock()
+	defer pd.lock.Unlock()
 	if mode == ModeRead {
 		pd.rdLock.Lock()
 		pd.rdState = pollDefault
