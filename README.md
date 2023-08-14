@@ -66,4 +66,6 @@ gosrt has been developed with srt 1.4.1 as its main target and has been successf
 
 Although `srtgo` is the official `srt` GO bindings, here's a list of alternate `srt` GO packages:
 
+In alphabet order:
 - [astisrt](https://github.com/asticode/go-astisrt)
+- [gosrt](https://github.com/datarhei/gosrt)
