@@ -1,7 +1,7 @@
 package srtgo
 
 /*
-#cgo LDFLAGS: -lsrt
+#cgo pkg-config: srt
 #include <srt/srt.h>
 #include <srt/access_control.h>
 #include "callback.h"
