@@ -38,18 +38,23 @@ func srtSendMsg2Impl(u C.SRTSOCKET, buf []byte, msgctrl *C.SRT_MSGCTRL) (n int, 
 
 // Write data to the SRT socket
 func (s SrtSocket) Write(b []byte) (n int, err error) {
-
-	//Fastpath:
-	if !s.blocking {
-		s.pd.reset(ModeWrite)
-	}
+	// Fast path: try writing immediately
 	n, err = srtSendMsg2Impl(s.socket, b, nil)
 
-	for {
-		if !errors.Is(err, error(EAsyncSND)) || s.blocking {
-			return
+	// If successful or blocking mode, return immediately
+	if err == nil || s.blocking || !errors.Is(err, error(EAsyncSND)) {
+		return
+	}
+
+	// Non-blocking mode: wait for socket to be ready for writing
+	if !s.blocking {
+		s.pd.reset(ModeWrite)
+		if waitErr := s.pd.wait(ModeWrite); waitErr != nil {
+			return 0, waitErr
 		}
-		s.pd.wait(ModeWrite)
+		// Try writing again after waiting
 		n, err = srtSendMsg2Impl(s.socket, b, nil)
 	}
+
+	return
 }

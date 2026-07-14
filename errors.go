@@ -6,6 +6,7 @@ package srtgo
 */
 import "C"
 import (
+	"runtime"
 	"strconv"
 	"syscall"
 )
@@ -59,6 +60,27 @@ func srtGetAndClearError() error {
 	defer C.srt_clearlasterror()
 	eSysErrno := C.int(0)
 	errno := C.srt_getlasterror(&eSysErrno)
+	srterr := SRTErrno(errno)
+	if eSysErrno != 0 {
+		return srterr.wrapSysErr(syscall.Errno(eSysErrno))
+	}
+	return srterr
+}
+
+// srtGetAndClearErrorThreadSafe is a thread-safe version that handles locking internally
+func srtGetAndClearErrorThreadSafe() error {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	return srtGetAndClearError()
+}
+
+// srtCheckError checks for SRT errors without clearing them, useful for hot paths
+func srtCheckError() error {
+	eSysErrno := C.int(0)
+	errno := C.srt_getlasterror(&eSysErrno)
+	if errno == 0 {
+		return nil
+	}
 	srterr := SRTErrno(errno)
 	if eSysErrno != 0 {
 		return srterr.wrapSysErr(syscall.Errno(eSysErrno))

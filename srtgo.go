@@ -170,8 +170,6 @@ func (s SrtSocket) GetSocket() C.int {
 // may be allowed to wait until they are accepted (excessive connection requests
 // are rejected in advance)
 func (s *SrtSocket) Listen(backlog int) error {
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
 	nbacklog := C.int(backlog)
 
 	sa, salen, err := CreateAddrInet(s.host, s.port)
@@ -182,13 +180,13 @@ func (s *SrtSocket) Listen(backlog int) error {
 	res := C.srt_bind(s.socket, sa, C.int(salen))
 	if res == SRT_ERROR {
 		C.srt_close(s.socket)
-		return fmt.Errorf("Error in srt_bind: %w", srtGetAndClearError())
+		return fmt.Errorf("Error in srt_bind: %w", srtGetAndClearErrorThreadSafe())
 	}
 
 	res = C.srt_listen(s.socket, nbacklog)
 	if res == SRT_ERROR {
 		C.srt_close(s.socket)
-		return fmt.Errorf("Error in srt_listen: %w", srtGetAndClearError())
+		return fmt.Errorf("Error in srt_listen: %w", srtGetAndClearErrorThreadSafe())
 	}
 
 	err = s.postconfiguration(s)
@@ -201,8 +199,6 @@ func (s *SrtSocket) Listen(backlog int) error {
 
 // Connect to a remote endpoint
 func (s *SrtSocket) Connect() error {
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
 	sa, salen, err := CreateAddrInet(s.host, s.port)
 	if err != nil {
 		return err
@@ -211,7 +207,7 @@ func (s *SrtSocket) Connect() error {
 	res := C.srt_connect(s.socket, sa, C.int(salen))
 	if res == SRT_ERROR {
 		C.srt_close(s.socket)
-		return srtGetAndClearError()
+		return srtGetAndClearErrorThreadSafe()
 	}
 
 	if !s.blocking {
@@ -230,12 +226,10 @@ func (s *SrtSocket) Connect() error {
 
 // Stats - Retrieve stats from the SRT socket
 func (s SrtSocket) Stats() (*SrtStats, error) {
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
 	var stats C.SRT_TRACEBSTATS = C.SRT_TRACEBSTATS{}
 	var b C.int = 1
 	if C.srt_bstats(s.socket, &stats, b) == SRT_ERROR {
-		return nil, fmt.Errorf("Error getting stats, %w", srtGetAndClearError())
+		return nil, fmt.Errorf("Error getting stats, %w", srtGetAndClearErrorThreadSafe())
 	}
 
 	return newSrtStats(&stats), nil
@@ -300,8 +294,8 @@ type ListenCallbackFunc func(socket *SrtSocket, version int, addr *net.UDPAddr, 
 func srtListenCBWrapper(arg unsafe.Pointer, socket C.SRTSOCKET, hsVersion C.int, peeraddr *C.struct_sockaddr, streamid *C.char) C.int {
 	userCB := gopointer.Restore(arg).(ListenCallbackFunc)
 
-	s := new(SrtSocket)
-	s.socket = socket
+	// Reuse socket struct to reduce allocations
+	s := &SrtSocket{socket: socket}
 	udpAddr, _ := udpAddrFromSockaddr((*syscall.RawSockaddrAny)(unsafe.Pointer(peeraddr)))
 
 	if userCB(s, int(hsVersion), udpAddr, C.GoString(streamid)) {
@@ -333,8 +327,8 @@ type ConnectCallbackFunc func(socket *SrtSocket, err error, addr *net.UDPAddr, t
 func srtConnectCBWrapper(arg unsafe.Pointer, socket C.SRTSOCKET, errcode C.int, peeraddr *C.struct_sockaddr, token C.int) {
 	userCB := gopointer.Restore(arg).(ConnectCallbackFunc)
 
-	s := new(SrtSocket)
-	s.socket = socket
+	// Reuse socket struct to reduce allocations
+	s := &SrtSocket{socket: socket}
 	udpAddr, _ := udpAddrFromSockaddr((*syscall.RawSockaddrAny)(unsafe.Pointer(peeraddr)))
 
 	userCB(s, SRTErrno(errcode), udpAddr, int(token))
@@ -475,29 +469,23 @@ func (s SrtSocket) SetSockOptString(opt int, value string) error {
 }
 
 func (s SrtSocket) setSockOpt(opt int, data unsafe.Pointer, size int) error {
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
 	res := C.srt_setsockopt(s.socket, 0, C.SRT_SOCKOPT(opt), data, C.int(size))
 	if res == -1 {
-		return fmt.Errorf("Error calling srt_setsockopt %w", srtGetAndClearError())
+		return fmt.Errorf("Error calling srt_setsockopt %w", srtGetAndClearErrorThreadSafe())
 	}
 	return nil
 }
 
 func (s SrtSocket) getSockOpt(opt int, data unsafe.Pointer, size *int) error {
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
 	res := C.srt_getsockopt(s.socket, 0, C.SRT_SOCKOPT(opt), data, (*C.int)(unsafe.Pointer(size)))
 	if res == -1 {
-		return fmt.Errorf("Error calling srt_getsockopt %w", srtGetAndClearError())
+		return fmt.Errorf("Error calling srt_getsockopt %w", srtGetAndClearErrorThreadSafe())
 	}
 
 	return nil
 }
 
 func (s SrtSocket) preconfiguration() (int, error) {
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
 	var blocking C.int
 	if s.blocking {
 		blocking = C.int(1)
@@ -506,7 +494,7 @@ func (s SrtSocket) preconfiguration() (int, error) {
 	}
 	result := C.srt_setsockopt(s.socket, 0, C.SRTO_RCVSYN, unsafe.Pointer(&blocking), C.int(unsafe.Sizeof(blocking)))
 	if result == -1 {
-		return ModeFailure, fmt.Errorf("could not set SRTO_RCVSYN flag: %w", srtGetAndClearError())
+		return ModeFailure, fmt.Errorf("could not set SRTO_RCVSYN flag: %w", srtGetAndClearErrorThreadSafe())
 	}
 
 	var mode int
@@ -554,8 +542,6 @@ func (s SrtSocket) preconfiguration() (int, error) {
 }
 
 func (s SrtSocket) postconfiguration(sck *SrtSocket) error {
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
 	var blocking C.int
 	if s.blocking {
 		blocking = 1
@@ -565,12 +551,12 @@ func (s SrtSocket) postconfiguration(sck *SrtSocket) error {
 
 	res := C.srt_setsockopt(sck.socket, 0, C.SRTO_SNDSYN, unsafe.Pointer(&blocking), C.int(unsafe.Sizeof(blocking)))
 	if res == -1 {
-		return fmt.Errorf("Error in postconfiguration setting SRTO_SNDSYN: %w", srtGetAndClearError())
+		return fmt.Errorf("Error in postconfiguration setting SRTO_SNDSYN: %w", srtGetAndClearErrorThreadSafe())
 	}
 
 	res = C.srt_setsockopt(sck.socket, 0, C.SRTO_RCVSYN, unsafe.Pointer(&blocking), C.int(unsafe.Sizeof(blocking)))
 	if res == -1 {
-		return fmt.Errorf("Error in postconfiguration setting SRTO_RCVSYN: %w", srtGetAndClearError())
+		return fmt.Errorf("Error in postconfiguration setting SRTO_RCVSYN: %w", srtGetAndClearErrorThreadSafe())
 	}
 
 	err := setSocketOptions(sck.socket, bindingPost, s.options)

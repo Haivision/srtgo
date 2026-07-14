@@ -71,39 +71,68 @@ func init() {
 }
 
 func (p *pollServer) run() {
-	timeoutMs := C.int64_t(-1)
+	// Use a reasonable timeout instead of infinite to prevent busy waiting
+	// and allow for graceful shutdown
+	timeoutMs := C.int64_t(100) // 100ms timeout
 	fds := [128]C.SRT_EPOLL_EVENT{}
 	fdlen := C.int(128)
+
 	for {
 		res := C.srt_epoll_uwait(p.srtEpollDescr, &fds[0], fdlen, timeoutMs)
 		if res == 0 {
-			continue //Shouldn't happen with -1
+			// Timeout occurred, this is normal with finite timeout
+			continue
 		} else if res == -1 {
+			// Check if this is a recoverable error
+			errno := C.srt_getlasterror(nil)
+			if errno == C.SRT_ETIMEOUT {
+				continue // Timeout is expected, continue polling
+			}
 			panic("srt_epoll_error")
 		} else if res > 0 {
 			max := int(res)
 			if fdlen < res {
 				max = int(fdlen)
 			}
-			p.pollDescLock.Lock()
-			for i := 0; i < max; i++ {
-				s := fds[i].fd
-				events := fds[i].events
 
-				pd := p.pollDescs[s]
-				if events&C.SRT_EPOLL_ERR != 0 {
-					pd.unblock(ModeRead, true, false)
-					pd.unblock(ModeWrite, true, false)
-					continue
-				}
-				if events&C.SRT_EPOLL_IN != 0 {
-					pd.unblock(ModeRead, false, true)
-				}
-				if events&C.SRT_EPOLL_OUT != 0 {
-					pd.unblock(ModeWrite, false, true)
-				}
-			}
-			p.pollDescLock.Unlock()
+			// Process events in batches to reduce lock contention
+			p.processEvents(fds[:max])
+		}
+	}
+}
+
+// processEvents handles a batch of events with optimized locking
+func (p *pollServer) processEvents(events []C.SRT_EPOLL_EVENT) {
+	// Take a snapshot of poll descriptors to minimize lock time
+	p.pollDescLock.Lock()
+	eventPds := make([]*pollDesc, len(events))
+	eventTypes := make([]C.int, len(events))
+
+	for i, event := range events {
+		if pd, exists := p.pollDescs[event.fd]; exists {
+			eventPds[i] = pd
+			eventTypes[i] = C.int(event.events)
+		}
+	}
+	p.pollDescLock.Unlock()
+
+	// Process events without holding the main lock
+	for i, pd := range eventPds {
+		if pd == nil {
+			continue
+		}
+
+		eventFlags := eventTypes[i]
+		if eventFlags&C.SRT_EPOLL_ERR != 0 {
+			pd.unblock(ModeRead, true, false)
+			pd.unblock(ModeWrite, true, false)
+			continue
+		}
+		if eventFlags&C.SRT_EPOLL_IN != 0 {
+			pd.unblock(ModeRead, false, true)
+		}
+		if eventFlags&C.SRT_EPOLL_OUT != 0 {
+			pd.unblock(ModeWrite, false, true)
 		}
 	}
 }

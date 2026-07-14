@@ -38,17 +38,23 @@ func srtRecvMsg2Impl(u C.SRTSOCKET, buf []byte, msgctrl *C.SRT_MSGCTRL) (n int, 
 
 // Read data from the SRT socket
 func (s SrtSocket) Read(b []byte) (n int, err error) {
-	//Fastpath
-	if !s.blocking {
-		s.pd.reset(ModeRead)
-	}
+	// Fast path: try reading immediately
 	n, err = srtRecvMsg2Impl(s.socket, b, nil)
 
-	for {
-		if !errors.Is(err, error(EAsyncRCV)) || s.blocking {
-			return
+	// If successful or blocking mode, return immediately
+	if err == nil || s.blocking || !errors.Is(err, error(EAsyncRCV)) {
+		return
+	}
+
+	// Non-blocking mode: wait for data to be available
+	if !s.blocking {
+		s.pd.reset(ModeRead)
+		if waitErr := s.pd.wait(ModeRead); waitErr != nil {
+			return 0, waitErr
 		}
-		s.pd.wait(ModeRead)
+		// Try reading again after waiting
 		n, err = srtRecvMsg2Impl(s.socket, b, nil)
 	}
+
+	return
 }

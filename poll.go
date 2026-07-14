@@ -6,6 +6,7 @@ package srtgo
 */
 import "C"
 import (
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -98,17 +99,25 @@ func (pd *pollDesc) wait(mode PollMode) error {
 	if err := pd.checkPollErr(mode); err != nil {
 		return err
 	}
+
+	// Fast path: check if already ready without locking
 	state := &pd.rdState
 	unblockChan := pd.unblockRd
 	expiryChan := pd.rdTimer.C
 	timerSeq := int64(0)
-	pd.lock.Lock()
+
 	if mode == ModeRead {
-		timerSeq = pd.rtSeq
+		if atomic.LoadInt32(&pd.rdState) == pollReady {
+			atomic.StoreInt32(&pd.rdState, pollDefault)
+			return nil
+		}
 		pd.rdLock.Lock()
 		defer pd.rdLock.Unlock()
 	} else if mode == ModeWrite {
-		timerSeq = pd.wtSeq
+		if atomic.LoadInt32(&pd.wrState) == pollReady {
+			atomic.StoreInt32(&pd.wrState, pollDefault)
+			return nil
+		}
 		state = &pd.wrState
 		unblockChan = pd.unblockWr
 		expiryChan = pd.wdTimer.C
@@ -116,16 +125,26 @@ func (pd *pollDesc) wait(mode PollMode) error {
 		defer pd.wrLock.Unlock()
 	}
 
+	pd.lock.Lock()
+	if mode == ModeRead {
+		timerSeq = pd.rtSeq
+	} else if mode == ModeWrite {
+		timerSeq = pd.wtSeq
+	}
+
+	// Try to transition to waiting state
 	for {
-		old := *state
+		old := atomic.LoadInt32(state)
 		if old == pollReady {
-			*state = pollDefault
+			atomic.StoreInt32(state, pollDefault)
 			pd.lock.Unlock()
 			return nil
 		}
 		if atomic.CompareAndSwapInt32(state, pollDefault, pollWait) {
 			break
 		}
+		// Yield to avoid busy spinning
+		runtime.Gosched()
 	}
 	pd.lock.Unlock()
 

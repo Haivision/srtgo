@@ -38,7 +38,9 @@ var (
 //export srtLogCBWrapper
 func srtLogCBWrapper(arg unsafe.Pointer, level C.int, file *C.char, line C.int, area, message *C.char) {
 	userCB := gopointer.Restore(arg).(LogCallBackFunc)
-	go userCB(SrtLogLevel(level), C.GoString(file), int(line), C.GoString(area), C.GoString(message))
+	// Call directly instead of creating a new goroutine to reduce overhead
+	// The user callback should handle any necessary async processing
+	userCB(SrtLogLevel(level), C.GoString(file), int(line), C.GoString(area), C.GoString(message))
 }
 
 func SrtSetLogLevel(level SrtLogLevel) {
