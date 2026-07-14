@@ -1,6 +1,5 @@
 package main
 
-// #cgo LDFLAGS: -lsrt
 // #include <srt/srt.h>
 import "C"
 
