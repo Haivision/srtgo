@@ -91,6 +91,9 @@ func (p *pollServer) run() {
 				events := fds[i].events
 
 				pd := p.pollDescs[s]
+				if pd == nil {
+					continue
+				}
 				if events&C.SRT_EPOLL_ERR != 0 {
 					pd.unblock(ModeRead, true, false)
 					pd.unblock(ModeWrite, true, false)
