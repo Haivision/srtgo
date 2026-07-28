@@ -95,8 +95,6 @@ func (p *pollServer) run() {
 
 				pd := p.pollDescs[s]
 				if pd == nil {
-					//Socket was closed and removed from the map after this
-					//event batch was collected by srt_epoll_uwait.
 					continue
 				}
 				if events&C.SRT_EPOLL_ERR != 0 {
