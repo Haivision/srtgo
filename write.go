@@ -49,7 +49,10 @@ func (s SrtSocket) Write(b []byte) (n int, err error) {
 		if !errors.Is(err, error(EAsyncSND)) || s.blocking {
 			return
 		}
-		s.pd.wait(ModeWrite)
+		err = s.pd.wait(ModeWrite)
+		if err != nil {
+			return
+		}
 		n, err = srtSendMsg2Impl(s.socket, b, nil)
 	}
 }
