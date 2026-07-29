@@ -1,6 +1,6 @@
 package main
 
-// #cgo LDFLAGS: -lsrt
+// #cgo pkg-config: srt
 // #include <srt/srt.h>
 import "C"
 
