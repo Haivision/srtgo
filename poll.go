@@ -39,6 +39,12 @@ const (
 	rdDeadline: deadline in NS before poll operation times out, -1 means timedout (needs to be cleared), 0 is without timeout
 	rdSeq: sequence number protects against spurious signalling of timeouts when timer is reset.
 	rdTimer: timer used to enforce deadline.
+
+	Concurrency note: rdState and wrState are accessed by the pollServer
+	goroutine from unblock(), which deliberately holds no lock. They must
+	therefore be touched with sync/atomic ONLY -- a plain load or store here
+	is a data race against unblock()'s atomic.SwapInt32, even where pd.lock
+	or rdLock/wrLock is held, because unblock() takes neither.
 */
 type pollDesc struct {
 	lock       sync.Mutex
@@ -142,9 +148,9 @@ func (pd *pollDesc) wait(mode PollMode) error {
 	}
 
 	for {
-		old := *state
+		old := atomic.LoadInt32(state)
 		if old == pollReady {
-			*state = pollDefault
+			atomic.StoreInt32(state, pollDefault)
 			pd.lock.Unlock()
 			return nil
 		}
@@ -285,11 +291,11 @@ func (pd *pollDesc) reset(mode PollMode) {
 	defer pd.lock.Unlock()
 	if mode == ModeRead {
 		pd.rdLock.Lock()
-		pd.rdState = pollDefault
+		atomic.StoreInt32(&pd.rdState, pollDefault)
 		pd.rdLock.Unlock()
 	} else if mode == ModeWrite {
 		pd.wrLock.Lock()
-		pd.wrState = pollDefault
+		atomic.StoreInt32(&pd.wrState, pollDefault)
 		pd.wrLock.Unlock()
 	}
 }
