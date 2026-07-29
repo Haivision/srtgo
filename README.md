@@ -1,3 +1,4 @@
+[![CI](https://github.com/Haivision/srtgo/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/Haivision/srtgo/actions/workflows/ci.yml)
 [![PkgGoDev](https://pkg.go.dev/badge/github.com/haivision/srtgo)](https://pkg.go.dev/github.com/haivision/srtgo)
 
 # srtgo
@@ -17,7 +18,7 @@ No! We are just exposing the great work done by the community in the [SRT projec
 * Live transport type
 * File transport type
 * Message/Buffer API
-* SRT transport options up to SRT 1.4.1
+* SRT transport options up to SRT 1.4.1 (options added by later libsrt releases are not exposed yet)
 * SRT Stats retrieval
 
 # Usage
@@ -60,4 +61,6 @@ func main() {
 
 You can find detailed instructions about how to install srtlib in its [README file](https://github.com/Haivision/srt#requirements)
 
-gosrt has been developed with srt 1.4.1 as its main target and has been successfully tested in srt 1.3.4 and above.
+srtgo requires **srt 1.4.2 or newer** to build: it uses APIs first introduced in 1.4.2 (`srt_connect_callback`, `srt_setrejectreason`, and the `SRT_EPOLLEMPTY`/`SRT_ESCLOSED`/`SRT_ESYSOBJ` error codes).
+
+For security, **srt 1.5.6 or newer is recommended**: every earlier release is affected by CVE-2026-55869 (buffer overflow in KMREQ/KMRSP handling) and CVE-2026-55868 (encryption state machine downgrade), both fixed in [srt 1.5.6](https://github.com/Haivision/srt/releases/tag/v1.5.6).
