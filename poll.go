@@ -33,14 +33,14 @@ const (
 /*
 	pollDesc contains the polling state for the associated SrtSocket
 	closing: socket is closing, reject all poll operations
-	pollErr: an error occured on the socket, indicates it's not useable anymore.
+	pollErr: an error occured on the socket, indicates it's not useable anymore. 0 = no error, 1 = error.
 	unblockRd: is used to unblock the poller when the socket becomes ready for io
 	rdState: polling state for read operations
 	rdDeadline: deadline in NS before poll operation times out, -1 means timedout (needs to be cleared), 0 is without timeout
 	rdSeq: sequence number protects against spurious signalling of timeouts when timer is reset.
 	rdTimer: timer used to enforce deadline.
 
-	Concurrency note: rdState and wrState are accessed by the pollServer
+	Concurrency note: pollErr, rdState and wrState are accessed by the pollServer
 	goroutine from unblock(), which deliberately holds no lock. They must
 	therefore be touched with sync/atomic ONLY -- a plain load or store here
 	is a data race against unblock()'s atomic.SwapInt32, even where pd.lock
@@ -50,7 +50,7 @@ type pollDesc struct {
 	lock       sync.Mutex
 	closing    bool
 	fd         C.SRTSOCKET
-	pollErr    bool
+	pollErr    int32
 	unblockRd  chan interface{}
 	rdState    int32
 	rdLock     sync.Mutex
@@ -99,7 +99,7 @@ func pollDescInit(s C.SRTSOCKET) *pollDesc {
 	pd.wrState = pollDefault
 	pd.pollS = pollServerCtx()
 	pd.closing = false
-	pd.pollErr = false
+	atomic.StoreInt32(&pd.pollErr, 0)
 	pd.rdSeq++
 	pd.wdSeq++
 	pd.lock.Unlock()
@@ -214,7 +214,7 @@ func (pd *pollDesc) checkPollErr(mode PollMode) error {
 		return &SrtEpollTimeout{}
 	}
 
-	if pd.pollErr {
+	if atomic.LoadInt32(&pd.pollErr) != 0 {
 		return &SrtSocketClosed{}
 	}
 
@@ -257,11 +257,14 @@ func (pd *pollDesc) setDeadline(t time.Time, mode PollMode) {
 	}
 }
 
+// unblock takes no pollDesc lock, on any path. setDeadline calls it while
+// holding pd.lock, so acquiring pd.lock here self-deadlocks on a non-reentrant
+// mutex -- the bug PR #72 fixed for the state update and left in the pollErr
+// branch. pollErr is therefore atomic, like rdState and wrState, and callers
+// are free to hold pd.lock, pollDescLock, or nothing at all.
 func (pd *pollDesc) unblock(mode PollMode, pollerr, ioready bool) {
 	if pollerr {
-		pd.lock.Lock()
-		pd.pollErr = pollerr
-		pd.lock.Unlock()
+		atomic.StoreInt32(&pd.pollErr, 1)
 	}
 	state := &pd.rdState
 	unblockChan := pd.unblockRd
