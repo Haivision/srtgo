@@ -1,0 +1,165 @@
+name: CI
+
+# First CI for srtgo. It builds the cgo binding against a non-vulnerable libsrt
+# and runs the test suite under the race detector.
+#
+# Deliberate constraints, do not "fix" without reading:
+#   * Tests bind real UDP sockets on 127.0.0.1, several of them on a hardcoded
+#     port 8090 (srtgo_test.go). Each matrix job gets its own fresh VM, so jobs
+#     never contend with each other, but each `go test` invocation must run the
+#     suite exactly once: `-count=1`. TestListen is not re-runnable in-process
+#     and fails on the second iteration under `-count=2` or higher. Do not add
+#     retries or reruns to paper over this; a real flake here is a bug worth
+#     seeing.
+#   * There is no Windows job. `go test` cannot even type-check for
+#     GOOS=windows because netutils_test.go imports golang.org/x/sys/unix with
+#     no build tag, and libsrt on a Windows runner would need a vcpkg build
+#     whose MSVC import libraries do not line up with the mingw gcc that cgo
+#     uses. A Windows job would fail on its first run, so it is omitted rather
+#     than shipped broken. Adding `//go:build !windows` to netutils_test.go is
+#     the first step towards changing that.
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Cancel superseded runs on the same ref. Keeps CI cheap and stops two runs of
+# the same branch from queueing up behind each other.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # libsrt <= 1.5.5 carries two critical CVEs (CVE-2026-55869, a buffer
+  # overflow in KMREQ/KMRSP handling, and CVE-2026-55868, an encryption state
+  # machine downgrade), both fixed in 1.5.6. CI must not build against anything
+  # older.
+  LIBSRT_TAG: v1.5.6
+  LIBSRT_MIN_VERSION: 10506 # 1.5.6, encoded as major*10000 + minor*100 + patch
+
+jobs:
+  test:
+    name: ${{ matrix.os }} / go ${{ matrix.go }}
+    runs-on: ${{ matrix.os }}
+    # The suite blocks on real UDP sockets; a wedged poll loop would otherwise
+    # sit on the runner until the 6 hour default fires, on every matrix cell.
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        # go.mod declares `go 1.12`; that is the floor promised to consumers,
+        # not a CI target. These are the two Go release lines under upstream
+        # support.
+        os: [ubuntu-latest, macos-latest]
+        go: ['1.25.x', '1.26.x']
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: ${{ matrix.go }}
+          check-latest: true
+
+      # ubuntu-latest is Ubuntu 24.04, whose packaged srt is 1.5.3
+      # (libsrt-openssl-dev / libsrt-dev, source package srt 1.5.3-1build2).
+      # That is below the CVE fix line, so the distro package is unusable here
+      # and libsrt is built from the pinned upstream tag instead.
+      - name: Install libsrt from source (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake pkg-config libssl-dev
+          git clone --depth 1 --branch "$LIBSRT_TAG" \
+            https://github.com/Haivision/srt.git "$RUNNER_TEMP/srt"
+          cmake -S "$RUNNER_TEMP/srt" -B "$RUNNER_TEMP/srt/build" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=/usr/local \
+            -DENABLE_APPS=OFF \
+            -DENABLE_STATIC=OFF \
+            -DENABLE_SHARED=ON \
+            -DENABLE_ENCRYPTION=ON \
+            -DUSE_ENCLIB=openssl-evp
+          cmake --build "$RUNNER_TEMP/srt/build" -j "$(nproc)"
+          sudo cmake --install "$RUNNER_TEMP/srt/build"
+          sudo ldconfig
+          echo "SRT_PREFIX=/usr/local" >> "$GITHUB_ENV"
+
+      # Homebrew's srt formula is at 1.5.6 with bottles for the arm64 macOS
+      # runner images, so a source build is unnecessary here. `brew update`
+      # first so the version assertion below is checking a current index rather
+      # than whatever the runner image happened to bake in.
+      - name: Install libsrt via Homebrew (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          set -euo pipefail
+          brew update --quiet
+          brew install srt
+          echo "SRT_PREFIX=$(brew --prefix srt)" >> "$GITHUB_ENV"
+
+      # Fail loudly rather than silently testing against a vulnerable libsrt.
+      # Reads the installed header rather than pkg-config, because the cgo build
+      # below does not use pkg-config either and this must assert the version of
+      # the headers and library actually being linked.
+      - name: Verify libsrt version
+        run: |
+          set -euo pipefail
+          header="$SRT_PREFIX/include/srt/version.h"
+          test -f "$header" || { echo "::error::libsrt headers not found at $header"; exit 1; }
+          parsed="$(awk '
+            /define[ \t]+SRT_VERSION_MAJOR/ { maj = $3 }
+            /define[ \t]+SRT_VERSION_MINOR/ { min = $3 }
+            /define[ \t]+SRT_VERSION_PATCH/ { pat = $3 }
+            END { printf "%d.%d.%d %d\n", maj, min, pat, maj * 10000 + min * 100 + pat }
+          ' "$header")"
+          version="${parsed% *}"
+          encoded="${parsed##* }"
+          echo "libsrt $version at $SRT_PREFIX"
+          if [ "$encoded" -lt "$LIBSRT_MIN_VERSION" ]; then
+            echo "::error::libsrt $version is older than 1.5.6 and is affected by CVE-2026-55869 and CVE-2026-55868"
+            exit 1
+          fi
+
+      # cgo in this repo hardcodes `#cgo LDFLAGS: -lsrt` and
+      # `#include <srt/srt.h>`, with no pkg-config, so the prefix has to be fed
+      # in through the environment.
+      #
+      # The -rpath is belt-and-braces, not decoration. Neither current install
+      # path strictly needs it -- the Linux source install is registered with
+      # ldconfig above, and the Homebrew bottle records an absolute install name
+      # -- but it costs nothing, and it is what keeps a non-default SRT_PREFIX
+      # (a source build into a private prefix, or a keg-only relocation) from
+      # producing a binary that links fine and then dies at exec time with
+      # "Library not loaded" / "cannot open shared object file".
+      - name: Configure cgo flags
+        run: |
+          set -euo pipefail
+          echo "CGO_CFLAGS=-I$SRT_PREFIX/include" >> "$GITHUB_ENV"
+          echo "CGO_LDFLAGS=-L$SRT_PREFIX/lib -Wl,-rpath,$SRT_PREFIX/lib" >> "$GITHUB_ENV"
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: Build
+        run: go build -v ./...
+
+      # -race is the point of this job: srtgo hands sockets between a
+      # process-wide poll server goroutine and caller goroutines, which is
+      # exactly the shape of bug the detector finds. The suite was racy until
+      # the pollDesc state accesses were made atomic; keep this step required so
+      # it cannot silently regress.
+      #
+      # -count=1 both defeats the test result cache and keeps each invocation to
+      # a single in-process run of the suite, which is the only mode TestListen
+      # supports.
+      - name: Test (race detector)
+        run: go test -count=1 -race -timeout 5m -v .

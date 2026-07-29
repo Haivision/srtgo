@@ -8,12 +8,16 @@ import "C"
 
 import (
 	"sync"
+	"sync/atomic"
 	"unsafe"
 )
 
 var (
 	phctx *pollServer
 	once  sync.Once
+	//started reports whether pollServerCtxInit has run, so shutdown can tell a
+	//never-started poll server from a running one without starting one itself.
+	started atomic.Bool
 )
 
 func pollServerCtx() *pollServer {
@@ -27,14 +31,44 @@ func pollServerCtxInit() {
 	phctx = &pollServer{
 		srtEpollDescr: eid,
 		pollDescs:     make(map[C.SRTSOCKET]*pollDesc),
+		stop:          make(chan struct{}),
+		done:          make(chan struct{}),
 	}
 	go phctx.run()
+	started.Store(true)
 }
 
 type pollServer struct {
 	srtEpollDescr C.int
 	pollDescLock  sync.Mutex
 	pollDescs     map[C.SRTSOCKET]*pollDesc
+	stop          chan struct{}
+	done          chan struct{}
+	stopOnce      sync.Once
+}
+
+// shutdown stops the poll loop and releases the epoll, in that order.
+//
+// The ordering is the whole point. run() spends nearly all its time parked
+// inside srt_epoll_uwait, and tearing SRT down underneath a thread that is
+// still in there is how the library ends up faulting during process exit.
+// shutdown signals the loop, waits for it to actually leave C, and only then
+// releases the epoll. It is idempotent and safe to call when no poll server
+// was ever started.
+func (p *pollServer) shutdown() {
+	p.stopOnce.Do(func() {
+		close(p.stop)
+		<-p.done
+		C.srt_epoll_release(p.srtEpollDescr)
+	})
+}
+
+// pollServerShutdown stops the process-wide poll server if one was started.
+func pollServerShutdown() {
+	if !started.Load() {
+		return
+	}
+	phctx.shutdown()
 }
 
 func (p *pollServer) pollOpen(pd *pollDesc) {
@@ -74,14 +108,29 @@ func init() {
 }
 
 func (p *pollServer) run() {
-	timeoutMs := C.int64_t(-1)
+	defer close(p.done)
+	//A finite timeout is what makes shutdown possible at all: with an infinite
+	//wait this goroutine would sit inside C indefinitely and could never
+	//observe p.stop. The wakeups are cheap and only happen while idle.
+	timeoutMs := C.int64_t(100)
 	fds := [128]C.SRT_EPOLL_EVENT{}
 	fdlen := C.int(128)
 	for {
+		select {
+		case <-p.stop:
+			return
+		default:
+		}
 		res := C.srt_epoll_uwait(p.srtEpollDescr, &fds[0], fdlen, timeoutMs)
 		if res == 0 {
-			continue //Shouldn't happen with -1
+			continue //timeout expired with nothing ready
 		} else if res == -1 {
+			//A failing uwait during shutdown is expected, not a bug.
+			select {
+			case <-p.stop:
+				return
+			default:
+			}
 			panic("srt_epoll_error")
 		} else if res > 0 {
 			max := int(res)
