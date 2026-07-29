@@ -6,10 +6,16 @@ package srtgo
 */
 import "C"
 import (
+	"math"
 	"sync"
 	"sync/atomic"
 	"time"
 )
+
+// noDeadline arms a timer effectively forever (~292 years). A timer created
+// with a zero or negative duration fires immediately and leaves a stale tick
+// in its channel, which wait() would observe as a spurious deadline expiry.
+const noDeadline = time.Duration(math.MaxInt64)
 
 const (
 	pollDefault = int32(iota)
@@ -61,10 +67,22 @@ var pdPool = sync.Pool{
 		return &pollDesc{
 			unblockRd: make(chan interface{}, 1),
 			unblockWr: make(chan interface{}, 1),
-			rdTimer:   time.NewTimer(time.Duration(1<<63 - 1)),
-			wdTimer:   time.NewTimer(time.Duration(1<<63 - 1)),
+			rdTimer:   time.NewTimer(noDeadline),
+			wdTimer:   time.NewTimer(noDeadline),
 		}
 	},
+}
+
+// stopTimer stops t and drains any tick already delivered to its channel, so
+// that a subsequent Reset cannot be observed as an immediate expiry. It must
+// not be called while a goroutine is selecting on t.C for this pollDesc.
+func stopTimer(t *time.Timer) {
+	if !t.Stop() {
+		select {
+		case <-t.C:
+		default:
+		}
+	}
 }
 
 func pollDescInit(s C.SRTSOCKET) *pollDesc {
@@ -92,6 +110,10 @@ func (pd *pollDesc) release() {
 	if !pd.closing || pd.rdState == pollWait || pd.wrState == pollWait {
 		panic("returning open or blocked upon pollDesc")
 	}
+	//Timers are stopped and drained before the pollDesc goes back into the
+	//pool, so a leftover tick cannot be seen by the next socket to reuse it.
+	stopTimer(pd.rdTimer)
+	stopTimer(pd.wdTimer)
 	pd.fd = 0
 	pdPool.Put(pd)
 }
@@ -206,9 +228,7 @@ func (pd *pollDesc) setDeadline(t time.Time, mode PollMode) {
 	if mode == ModeRead || mode == ModeRead+ModeWrite {
 		pd.rdSeq++
 		pd.rtSeq = pd.rdSeq
-		if pd.rdDeadline > 0 {
-			pd.rdTimer.Stop()
-		}
+		stopTimer(pd.rdTimer)
 		pd.rdDeadline = d
 		if d > 0 {
 			pd.rdTimer.Reset(time.Duration(d))
@@ -220,9 +240,7 @@ func (pd *pollDesc) setDeadline(t time.Time, mode PollMode) {
 	if mode == ModeWrite || mode == ModeRead+ModeWrite {
 		pd.wdSeq++
 		pd.wtSeq = pd.wdSeq
-		if pd.wdDeadline > 0 {
-			pd.wdTimer.Stop()
-		}
+		stopTimer(pd.wdTimer)
 		pd.wdDeadline = d
 		if d > 0 {
 			pd.wdTimer.Reset(time.Duration(d))
