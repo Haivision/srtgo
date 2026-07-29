@@ -1,0 +1,91 @@
+# Dependabot configuration for github.com/haivision/srtgo
+# Reference: https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference
+#
+# Dependabot security updates are enabled on this repository, but without a
+# configuration file that is all Dependabot does -- PR #59 (the x/sys v0.1.0
+# bump) is an example. Routine version-update PRs require an explicit
+# configuration, which is what this is.
+version: 2
+
+updates:
+  # Go modules: go.mod / go.sum in the repository root (single module).
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Etc/UTC"
+    commit-message:
+      prefix: "deps"
+    ignore:
+      # golang.org/x/sys is deliberately held at v0.1.x.
+      #
+      # go.mod declares `go 1.12` on purpose: raising it would force a newer
+      # toolchain on every downstream consumer of this binding. Newer x/sys
+      # releases do exactly that. v0.1.0 declares `go 1.17`; from v0.31.0 the
+      # floor is `go 1.23.0`, and every release from v0.42.0 through the
+      # current v0.47.0 declares `go 1.25.0` -- so accepting even a 0.x "minor"
+      # bump here silently raises srtgo's effective Go floor. srtgo uses x/sys
+      # only for address families and sockaddr sizes, in netutils_unix.go,
+      # netutils_windows.go and the netutils_test.go assertions, which has been
+      # stable for years, so there is nothing to gain from tracking it.
+      #
+      # DO NOT rewrite this as `update-types: ["version-update:semver-minor",
+      # "version-update:semver-major"]`. An `update-types` ignore is not
+      # applied to security updates: dependabot-core's
+      # Config::IgnoreCondition#ignored_versions begins `return versions if
+      # security_updates_only`, so on a security run the `update-types` entries
+      # are dropped and only a `versions` list survives. (GitHub's options
+      # reference states the same limitation in as many words, but only under
+      # `update-types` (`allow`); the `update-types` (`ignore`) section is
+      # silent on it, so the code is the citation that matters here.) An
+      # `update-types` ignore would therefore still let a security-update PR
+      # bump x/sys to v0.44.0+ and drag the `go` directive to 1.25.0. A
+      # `versions` range is honored by both code paths, which is the entire
+      # point of this entry.
+      #
+      # Consequence, knowingly accepted: if a Dependabot alert is ever raised
+      # for x/sys, this entry suppresses the security-update PR for it too.
+      # That is not currently the case for GO-2026-5024 / CVE-2026-39824
+      # (integer overflow in NewNTUnicodeString, first fixed in x/sys v0.44.0):
+      # GitHub's advisory for that CVE is unreviewed and carries no
+      # affected-version ranges, so it raises no Dependabot alert here and
+      # there is no security-update PR to suppress. The affected symbol is
+      # Windows-only and is never called from this repository. See SECURITY.md
+      # for the full rationale.
+      #
+      # Revisit: delete this entry once go.mod's minimum Go version is raised,
+      # or sooner if an advisory lands that actually affects the packages
+      # srtgo imports.
+      - dependency-name: "golang.org/x/sys"
+        versions:
+          - ">= 0.2.0"
+
+  # Actions referenced by the workflows in .github/workflows/.
+  # `directory: "/"` is correct here: for github-actions Dependabot searches
+  # /.github/workflows plus a root action.yml/action.yaml. In this repository
+  # that means the single workflow .github/workflows/ci.yml, which references
+  # actions/checkout and actions/setup-go at their v7 major tags; there is no
+  # root action.yml and srtgo is not published as an action. Dependabot
+  # discovers those `uses:` references itself -- they are named here only so a
+  # reader knows what this block is watching.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Etc/UTC"
+    commit-message:
+      prefix: "ci"
+    groups:
+      # Both actions live in the same workflow and are exercised by the same
+      # CI run, which builds libsrt from source on the Linux matrix legs. One
+      # combined PR per week costs one CI run instead of one per action, and
+      # there is no reason to land a checkout bump and a setup-go bump
+      # separately. `applies-to` defaults to version updates, so security
+      # updates still arrive as individual PRs.
+      actions:
+        patterns:
+          - "*"
