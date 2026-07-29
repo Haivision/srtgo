@@ -263,12 +263,12 @@ func (pd *pollDesc) unblock(mode PollMode, pollerr, ioready bool) {
 		state = &pd.wrState
 		unblockChan = pd.unblockWr
 	}
-	pd.lock.Lock()
-	old := atomic.LoadInt32(state)
+	var old int32
 	if ioready {
-		atomic.StoreInt32(state, pollReady)
+		old = atomic.SwapInt32(state, pollReady)
+	} else {
+		old = atomic.LoadInt32(state)
 	}
-	pd.lock.Unlock()
 	if old == pollWait {
 		//make sure we never block here
 		select {

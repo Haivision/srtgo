@@ -46,7 +46,7 @@ func (s SrtSocket) Accept() (*SrtSocket, *net.UDPAddr, error) {
 		}
 	}
 	var addr syscall.RawSockaddrAny
-	sclen := C.int(syscall.SizeofSockaddrAny)
+	sclen := C.int(sizeofSockaddrAny)
 	socket, err := srtAcceptImpl(s.socket, (*C.struct_sockaddr)(unsafe.Pointer(&addr)), &sclen)
 	if err != nil {
 		return nil, nil, err
