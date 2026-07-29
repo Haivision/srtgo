@@ -11,13 +11,16 @@ name: CI
 #     and fails on the second iteration under `-count=2` or higher. Do not add
 #     retries or reruns to paper over this; a real flake here is a bug worth
 #     seeing.
-#   * There is no Windows job. `go test` cannot even type-check for
-#     GOOS=windows because netutils_test.go imports golang.org/x/sys/unix with
-#     no build tag, and libsrt on a Windows runner would need a vcpkg build
+#   * There is still no Windows job, but the test sources are no longer the
+#     reason. netutils_test.go used to import golang.org/x/sys/unix with no
+#     build tag, which made `go test` fail to type-check for GOOS=windows; it
+#     now uses the package-internal afINET4/afINET6 constants, and
+#     portability_test.go guards against that import coming back. What remains
+#     is the toolchain: libsrt on a Windows runner would need a vcpkg build
 #     whose MSVC import libraries do not line up with the mingw gcc that cgo
-#     uses. A Windows job would fail on its first run, so it is omitted rather
-#     than shipped broken. Adding `//go:build !windows` to netutils_test.go is
-#     the first step towards changing that.
+#     uses. Do not "fix" this by adding `//go:build !windows` to
+#     netutils_test.go -- that would hide the test on Windows rather than make
+#     it run.
 
 on:
   push:
