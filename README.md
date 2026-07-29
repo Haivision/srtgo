@@ -63,4 +63,4 @@ You can find detailed instructions about how to install srtlib in its [README fi
 
 srtgo requires **srt 1.4.2 or newer** to build: it uses APIs first introduced in 1.4.2 (`srt_connect_callback`, `srt_setrejectreason`, and the `SRT_EPOLLEMPTY`/`SRT_ESCLOSED`/`SRT_ESYSOBJ` error codes).
 
-For security, **srt 1.5.6 or newer is recommended**: every earlier release is affected by CVE-2026-55869 (buffer overflow in KMREQ/KMRSP handling) and CVE-2026-55868 (encryption state machine downgrade), both fixed in [srt 1.5.6](https://github.com/Haivision/srt/releases/tag/v1.5.6).
+For security, **srt 1.5.6 or newer is recommended**: every earlier release is affected by CVE-2026-55869 (buffer overflow in KMREQ/KMRSP handling) and CVE-2026-55868 (encryption state machine downgrade), both fixed in [srt 1.5.6](https://github.com/Haivision/srt/releases/tag/v1.5.6). See [SECURITY.md](SECURITY.md).
