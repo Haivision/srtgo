@@ -2,6 +2,7 @@ package srtgo
 
 import (
 	"math/rand"
+	"net"
 	"sync"
 	"testing"
 	"time"
@@ -301,5 +302,42 @@ func TestSetSockOptBool(t *testing.T) {
 	}
 	if v != expected {
 		t.Errorf("Failed to set SRTO_MESSAGEAPI expected %t, got %t\n", expected, v)
+	}
+}
+
+func TestClose(t *testing.T) {
+	InitSRT()
+
+	options := make(map[string]string)
+	options["blocking"] = "0"
+	options["transtype"] = "file"
+
+	a := NewSrtSocket("0.0.0.0", 8090, options)
+
+	a.SetListenCallback(func(socket *SrtSocket, version int, addr *net.UDPAddr, streamid string) bool {
+		return true
+	})
+	if len(listenCallbackMap) != 1 {
+		t.Error("Failed to set listen callback")
+	}
+
+	a.SetConnectCallback(func(socket *SrtSocket, err error, addr *net.UDPAddr, token int) {
+	})
+	if len(connectCallbackMap) != 1 {
+		t.Error("Failed to set connect callback")
+	}
+
+	err := a.Listen(2)
+	if err != nil {
+		t.Error("Error on testListen")
+	}
+
+	a.Close()
+
+	if len(listenCallbackMap) != 0 {
+		t.Error("Failed to delete listen callback")
+	}
+	if len(connectCallbackMap) != 0 {
+		t.Error("Failed to delete connect callback")
 	}
 }

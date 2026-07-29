@@ -289,16 +289,19 @@ func (s *SrtSocket) SetWriteDeadline(deadline time.Time) {
 func (s *SrtSocket) Close() {
 
 	C.srt_close(s.socket)
+	socket := s.socket
 	s.socket = SRT_INVALID_SOCK
 	if !s.blocking {
 		s.pd.close()
 	}
 	callbackMutex.Lock()
-	if ptr, exists := listenCallbackMap[s.socket]; exists {
+	if ptr, exists := listenCallbackMap[socket]; exists {
 		gopointer.Unref(ptr)
+		delete(listenCallbackMap, socket)
 	}
-	if ptr, exists := connectCallbackMap[s.socket]; exists {
+	if ptr, exists := connectCallbackMap[socket]; exists {
 		gopointer.Unref(ptr)
+		delete(connectCallbackMap, socket)
 	}
 	callbackMutex.Unlock()
 }
