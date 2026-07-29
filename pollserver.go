@@ -8,34 +8,39 @@ import "C"
 
 import (
 	"sync"
-	"sync/atomic"
 	"unsafe"
 )
 
 var (
-	phctx *pollServer
-	once  sync.Once
-	//started reports whether pollServerCtxInit has run, so shutdown can tell a
-	//never-started poll server from a running one without starting one itself.
-	started atomic.Bool
+	//phctx is nil whenever no poll server is running: before the first socket
+	//is created, and again after CleanupSRT. It is deliberately not a
+	//sync.Once -- a shut down poll server must be replaceable, so that
+	//CleanupSRT followed by InitSRT works the way it did before shutdown
+	//existed.
+	phctxLock sync.Mutex
+	phctx     *pollServer
 )
 
 func pollServerCtx() *pollServer {
-	once.Do(pollServerCtxInit)
+	phctxLock.Lock()
+	defer phctxLock.Unlock()
+	if phctx == nil {
+		phctx = newPollServer()
+	}
 	return phctx
 }
 
-func pollServerCtxInit() {
+func newPollServer() *pollServer {
 	eid := C.srt_epoll_create()
 	C.srt_epoll_set(eid, C.SRT_EPOLL_ENABLE_EMPTY)
-	phctx = &pollServer{
+	p := &pollServer{
 		srtEpollDescr: eid,
 		pollDescs:     make(map[C.SRTSOCKET]*pollDesc),
 		stop:          make(chan struct{}),
 		done:          make(chan struct{}),
 	}
-	go phctx.run()
-	started.Store(true)
+	go p.run()
+	return p
 }
 
 type pollServer struct {
@@ -63,12 +68,18 @@ func (p *pollServer) shutdown() {
 	})
 }
 
-// pollServerShutdown stops the process-wide poll server if one was started.
+// pollServerShutdown stops the process-wide poll server if one is running, and
+// clears it so a later socket starts a fresh one rather than reusing an epoll
+// that has already been released.
 func pollServerShutdown() {
-	if !started.Load() {
+	phctxLock.Lock()
+	p := phctx
+	phctx = nil
+	phctxLock.Unlock()
+	if p == nil {
 		return
 	}
-	phctx.shutdown()
+	p.shutdown()
 }
 
 func (p *pollServer) pollOpen(pd *pollDesc) {
