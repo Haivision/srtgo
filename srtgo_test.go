@@ -18,6 +18,9 @@ func randomPort() uint16 {
 func TestNewSocket(t *testing.T) {
 	options := make(map[string]string)
 	a := NewSrtSocket("localhost", 8090, options)
+	if a != nil {
+		defer a.Close()
+	}
 
 	if a == nil {
 		t.Error("Could not create a srt socket")
@@ -28,6 +31,9 @@ func TestNewSocketBlocking(t *testing.T) {
 	options := make(map[string]string)
 	options["blocking"] = "true"
 	a := NewSrtSocket("localhost", 8090, options)
+	if a != nil {
+		defer a.Close()
+	}
 
 	if a == nil {
 		t.Error("Could not create a srt socket")
@@ -38,6 +44,9 @@ func TestNewSocketLinger(t *testing.T) {
 	options := make(map[string]string)
 	options["linger"] = "1000"
 	a := NewSrtSocket("localhost", 8090, options)
+	if a != nil {
+		defer a.Close()
+	}
 
 	if a == nil {
 		t.Error("Could not create a srt socket with linger")
@@ -57,6 +66,9 @@ func TestNewSocketWithTransType(t *testing.T) {
 	options := make(map[string]string)
 	options["transtype"] = "3"
 	a := NewSrtSocket("localhost", 8090, options)
+	if a != nil {
+		defer a.Close()
+	}
 
 	if a == nil {
 		t.Error("Could not create a srt socket")
@@ -67,6 +79,9 @@ func TestNewSocketWithParameters(t *testing.T) {
 	options := make(map[string]string)
 	options["pbkeylen"] = "32"
 	a := NewSrtSocket("localhost", 8090, options)
+	if a != nil {
+		defer a.Close()
+	}
 
 	if a == nil {
 		t.Error("Could not create a srt socket")
@@ -77,6 +92,9 @@ func TestNewSocketWithInt64Param(t *testing.T) {
 	options := make(map[string]string)
 	options["maxbw"] = "300000"
 	a := NewSrtSocket("localhost", 8090, options)
+	if a != nil {
+		defer a.Close()
+	}
 
 	if a == nil {
 		t.Error("Could not create a srt socket")
@@ -87,6 +105,9 @@ func TestNewSocketWithBoolParam(t *testing.T) {
 	options := make(map[string]string)
 	options["enforcedencryption"] = "0"
 	a := NewSrtSocket("localhost", 8090, options)
+	if a != nil {
+		defer a.Close()
+	}
 
 	if a == nil {
 		t.Error("Could not create a srt socket")
@@ -97,6 +118,9 @@ func TestNewSocketWithStringParam(t *testing.T) {
 	options := make(map[string]string)
 	options["passphrase"] = "11111111111"
 	a := NewSrtSocket("localhost", 8090, options)
+	if a != nil {
+		defer a.Close()
+	}
 
 	if a == nil {
 		t.Error("Could not create a srt socket")
@@ -111,6 +135,9 @@ func TestListen(t *testing.T) {
 	options["transtype"] = "file"
 
 	a := NewSrtSocket("0.0.0.0", 8090, options)
+	if a != nil {
+		defer a.Close()
+	}
 	err := a.Listen(2)
 	if err != nil {
 		t.Error("Error on testListen")
@@ -156,6 +183,12 @@ func AcceptHelper(numSockets int, port uint16, options map[string]string, t *tes
 		}
 		if sock == nil || addr == nil {
 			t.Error("Expected non-nil addr and sock")
+		}
+		//An accepted socket is a live connection of its own. Leaving it open
+		//keeps its multiplexer, and that multiplexer's SRT receive-queue
+		//thread, alive past the end of the test.
+		if sock != nil {
+			defer sock.Close()
 		}
 	}
 
@@ -206,6 +239,9 @@ func TestSetSockOptInt(t *testing.T) {
 	InitSRT()
 	options := make(map[string]string)
 	a := NewSrtSocket("localhost", 8090, options)
+	if a != nil {
+		defer a.Close()
+	}
 
 	expected := 200
 	err := a.SetSockOptInt(SRTO_LATENCY, expected)
@@ -226,6 +262,9 @@ func TestSetSockOptString(t *testing.T) {
 	InitSRT()
 	options := make(map[string]string)
 	a := NewSrtSocket("localhost", 8090, options)
+	if a != nil {
+		defer a.Close()
+	}
 
 	expected := "123"
 	err := a.SetSockOptString(SRTO_STREAMID, expected)
@@ -246,6 +285,9 @@ func TestSetSockOptBool(t *testing.T) {
 	InitSRT()
 	options := make(map[string]string)
 	a := NewSrtSocket("localhost", 8090, options)
+	if a != nil {
+		defer a.Close()
+	}
 
 	expected := true
 	err := a.SetSockOptBool(SRTO_MESSAGEAPI, expected)

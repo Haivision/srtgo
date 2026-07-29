@@ -74,7 +74,17 @@ func InitSRT() {
 }
 
 // CleanupSRT - Cleanup SRT lib
+//
+// Stops the internal poll server before calling srt_cleanup, so SRT is not
+// torn down while a goroutine is still waiting inside srt_epoll_uwait.
+// Programs should call this before exiting: SRT runs its own receive-queue
+// threads, and letting the process exit while they are live lets libsrt's
+// global destructors free state underneath them.
+//
+// Note that srt_cleanup is reference counted against srt_startup, so this
+// only takes effect once the counts balance.
 func CleanupSRT() {
+	pollServerShutdown()
 	C.srt_cleanup()
 }
 
