@@ -70,7 +70,6 @@ var pdPool = sync.Pool{
 func pollDescInit(s C.SRTSOCKET) *pollDesc {
 	pd := pdPool.Get().(*pollDesc)
 	pd.lock.Lock()
-	defer pd.lock.Unlock()
 	pd.fd = s
 	pd.rdState = pollDefault
 	pd.wrState = pollDefault
@@ -79,6 +78,10 @@ func pollDescInit(s C.SRTSOCKET) *pollDesc {
 	pd.pollErr = false
 	pd.rdSeq++
 	pd.wdSeq++
+	pd.lock.Unlock()
+	//This is defensive, the lock order inversion between pollDesc.lock and
+	//pollServer.pollDescLock is fixed for this side by the other change in
+	//pollServer.pollClose.
 	pd.pollS.pollOpen(pd)
 	return pd
 }
@@ -161,11 +164,14 @@ wait:
 
 func (pd *pollDesc) close() {
 	pd.lock.Lock()
-	defer pd.lock.Unlock()
 	if pd.closing {
+		pd.lock.Unlock()
 		return
 	}
 	pd.closing = true
+	//Lock order rule: pollClose holds pollDescLock while there is a chance
+	//that pollServer.run is waiting on pd.lock while holding pollDescLock
+	pd.lock.Unlock()
 	pd.pollS.pollClose(pd)
 }
 

@@ -53,6 +53,12 @@ func (p *pollServer) pollOpen(pd *pollDesc) {
 
 func (p *pollServer) pollClose(pd *pollDesc) {
 	sockstate := C.srt_getsockstate(pd.fd)
+
+	//Remove from the map, so closed sockets don't slowly fill the map.
+	p.pollDescLock.Lock()
+	delete(p.pollDescs, pd.fd)
+	p.pollDescLock.Unlock()
+
 	//Broken/closed sockets get removed internally by SRT lib
 	if sockstate == C.SRTS_BROKEN || sockstate == C.SRTS_CLOSING || sockstate == C.SRTS_CLOSED || sockstate == C.SRTS_NONEXIST {
 		return
@@ -61,9 +67,6 @@ func (p *pollServer) pollClose(pd *pollDesc) {
 	if ret == -1 {
 		panic("ERROR REMOVING FD FROM EPOLL")
 	}
-	p.pollDescLock.Lock()
-	delete(p.pollDescs, pd.fd)
-	p.pollDescLock.Unlock()
 }
 
 func init() {
