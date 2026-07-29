@@ -28,6 +28,10 @@ type PollMode int
 const (
 	ModeRead = PollMode(iota)
 	ModeWrite
+	// ModeReadWrite addresses the read and the write side at once. It must be
+	// its own value: ModeRead is 0, so the expression ModeRead+ModeWrite is
+	// just ModeWrite and cannot be distinguished from it.
+	ModeReadWrite
 )
 
 /*
@@ -231,7 +235,7 @@ func (pd *pollDesc) setDeadline(t time.Time, mode PollMode) {
 			d = -1
 		}
 	}
-	if mode == ModeRead || mode == ModeRead+ModeWrite {
+	if mode == ModeRead || mode == ModeReadWrite {
 		pd.rdSeq++
 		pd.rtSeq = pd.rdSeq
 		stopTimer(pd.rdTimer)
@@ -243,7 +247,7 @@ func (pd *pollDesc) setDeadline(t time.Time, mode PollMode) {
 			pd.unblock(ModeRead, false, false)
 		}
 	}
-	if mode == ModeWrite || mode == ModeRead+ModeWrite {
+	if mode == ModeWrite || mode == ModeReadWrite {
 		pd.wdSeq++
 		pd.wtSeq = pd.wdSeq
 		stopTimer(pd.wdTimer)
