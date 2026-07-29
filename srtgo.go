@@ -274,7 +274,7 @@ func (s *SrtSocket) SetPollTimeout(pollTimeout time.Duration) {
 }
 
 func (s *SrtSocket) SetDeadline(deadline time.Time) {
-	s.pd.setDeadline(deadline, ModeRead+ModeWrite)
+	s.pd.setDeadline(deadline, ModeReadWrite)
 }
 
 func (s *SrtSocket) SetReadDeadline(deadline time.Time) {
