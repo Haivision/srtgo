@@ -2,9 +2,13 @@ package srtgo
 
 import (
 	"testing"
-
-	"golang.org/x/sys/unix"
 )
+
+// sa_data holds C `char`, whose signedness is ABI-defined: cgo maps it to int8
+// where plain char is signed (x86-64 System V, Apple arm64) and to uint8 where
+// it is unsigned (AArch64 Linux / AAPCS64). Expectations must therefore be
+// written as raw bytes and compared through a byte() conversion, which is
+// value-preserving in both directions for the same bit pattern.
 
 func TestCreateAddrInetV4(t *testing.T) {
 	ip1, size, err := CreateAddrInet("0.0.0.0", 8090)
@@ -17,18 +21,19 @@ func TestCreateAddrInetV4(t *testing.T) {
 		t.Error("Ip Address size does not match", size)
 	}
 
-	if ip1.sa_family != unix.AF_INET {
+	if ip1.sa_family != afINET4 {
 		t.Error("Ip Address family does not match")
 	}
 
-	data := []int{31, -102, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
+	// port 8090 == 0x1f9a, then 0.0.0.0
+	data := []byte{0x1f, 0x9a, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
 	if len(data) != len(ip1.sa_data) {
 		t.Error("Ip Address ip.sa_data length should be equal")
 	}
 
 	for i := 0; i < len(data); i++ {
-		if data[i] != int(ip1.sa_data[i]) {
-			t.Error("Ip Address ip.sa_data does not match")
+		if data[i] != byte(ip1.sa_data[i]) {
+			t.Errorf("Ip Address ip.sa_data does not match at %d: got %#02x, want %#02x", i, byte(ip1.sa_data[i]), data[i])
 		}
 	}
 
@@ -45,17 +50,18 @@ func TestCreateAddrInetV6(t *testing.T) {
 		t.Error("Ipv6 Address size does not match", size)
 	}
 
-	if ip1.sa_family != unix.AF_INET6 {
+	if ip1.sa_family != afINET6 {
 		t.Error("Ipv6 Address family does not match")
 	}
-	data := []int{31, -102, 0, 0, 0, 0, 32, 1, 13, -72, -123, -93, 0, 0}
+	// port 8090 == 0x1f9a, zero flowinfo, then the leading 8 bytes of the address
+	data := []byte{0x1f, 0x9a, 0x00, 0x00, 0x00, 0x00, 0x20, 0x01, 0x0d, 0xb8, 0x85, 0xa3, 0x00, 0x00}
 	if len(data) != len(ip1.sa_data) {
 		t.Error("Ipv6 Address ip.sa_data length should be equal")
 	}
 
 	for i := 0; i < len(data); i++ {
-		if data[i] != int(ip1.sa_data[i]) {
-			t.Error("Ipv6 Address ip.sa_data does not match")
+		if data[i] != byte(ip1.sa_data[i]) {
+			t.Errorf("Ipv6 Address ip.sa_data does not match at %d: got %#02x, want %#02x", i, byte(ip1.sa_data[i]), data[i])
 		}
 	}
 
