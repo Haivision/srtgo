@@ -16,6 +16,7 @@ SRTSOCKET srt_accept_wrapped(SRTSOCKET lsn, struct sockaddr* addr, int* addrlen,
 */
 import "C"
 import (
+	"errors"
 	"fmt"
 	"net"
 	"syscall"
@@ -37,17 +38,37 @@ func srtAcceptImpl(lsn C.SRTSOCKET, addr *C.struct_sockaddr, addrlen *C.int) (C.
 }
 
 // Accept an incoming connection
+//
+// The accept path deliberately mirrors Read and Write: try first, and only
+// wait when SRT reports there is nothing pending. Waiting first is what made
+// a listener lose connections. Sockets are registered edge-triggered, and
+// libsrt collapses every connection that arrives between two srt_epoll_uwait
+// calls into a single SRT_EPOLL_IN notice, which it then clears once reported.
+// A backlog therefore produces exactly one readiness edge no matter how many
+// connections it holds, and libsrt raises no further edge while the readiness
+// bit is still set -- so a listener that accepted one connection and went back
+// to waiting would never be woken for the rest, nor for any later arrival.
+// Attempting the accept up front drains the backlog across successive calls
+// without needing an edge that is never coming.
 func (s SrtSocket) Accept() (*SrtSocket, *net.UDPAddr, error) {
-	var err error
-	if !s.blocking {
-		err = s.pd.wait(ModeRead)
-		if err != nil {
-			return nil, nil, err
-		}
-	}
 	var addr syscall.RawSockaddrAny
 	sclen := C.int(sizeofSockaddrAny)
+
+	//Fastpath
+	if !s.blocking {
+		s.pd.reset(ModeRead)
+	}
 	socket, err := srtAcceptImpl(s.socket, (*C.struct_sockaddr)(unsafe.Pointer(&addr)), &sclen)
+	for {
+		if !errors.Is(err, error(EAsyncRCV)) || s.blocking {
+			break
+		}
+		if err = s.pd.wait(ModeRead); err != nil {
+			return nil, nil, err
+		}
+		sclen = C.int(sizeofSockaddrAny)
+		socket, err = srtAcceptImpl(s.socket, (*C.struct_sockaddr)(unsafe.Pointer(&addr)), &sclen)
+	}
 	if err != nil {
 		return nil, nil, err
 	}
