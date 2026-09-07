@@ -311,13 +311,29 @@ type ListenCallbackFunc func(socket *SrtSocket, version int, addr *net.UDPAddr, 
 
 //export srtListenCBWrapper
 func srtListenCBWrapper(arg unsafe.Pointer, socket C.SRTSOCKET, hsVersion C.int, peeraddr *C.struct_sockaddr, streamid *C.char) C.int {
-	userCB := gopointer.Restore(arg).(ListenCallbackFunc)
+	callbackMutex.Lock()
+	restored := gopointer.Restore(arg)
+	callbackMutex.Unlock()
+
+	userCB, ok := restored.(ListenCallbackFunc)
+	if !ok || userCB == nil {
+		return SRT_ERROR
+	}
 
 	s := new(SrtSocket)
 	s.socket = socket
-	udpAddr, _ := udpAddrFromSockaddr((*syscall.RawSockaddrAny)(unsafe.Pointer(peeraddr)))
 
-	if userCB(s, int(hsVersion), udpAddr, C.GoString(streamid)) {
+	var udpAddr *net.UDPAddr
+	if peeraddr != nil {
+		udpAddr, _ = udpAddrFromSockaddr((*syscall.RawSockaddrAny)(unsafe.Pointer(peeraddr)))
+	}
+
+	var sid string
+	if streamid != nil {
+		sid = C.GoString(streamid)
+	}
+
+	if userCB(s, int(hsVersion), udpAddr, sid) {
 		return 0
 	}
 	return SRT_ERROR
@@ -344,11 +360,22 @@ type ConnectCallbackFunc func(socket *SrtSocket, err error, addr *net.UDPAddr, t
 
 //export srtConnectCBWrapper
 func srtConnectCBWrapper(arg unsafe.Pointer, socket C.SRTSOCKET, errcode C.int, peeraddr *C.struct_sockaddr, token C.int) {
-	userCB := gopointer.Restore(arg).(ConnectCallbackFunc)
+	callbackMutex.Lock()
+	restored := gopointer.Restore(arg)
+	callbackMutex.Unlock()
+
+	userCB, ok := restored.(ConnectCallbackFunc)
+	if !ok || userCB == nil {
+		return
+	}
 
 	s := new(SrtSocket)
 	s.socket = socket
-	udpAddr, _ := udpAddrFromSockaddr((*syscall.RawSockaddrAny)(unsafe.Pointer(peeraddr)))
+
+	var udpAddr *net.UDPAddr
+	if peeraddr != nil {
+		udpAddr, _ = udpAddrFromSockaddr((*syscall.RawSockaddrAny)(unsafe.Pointer(peeraddr)))
+	}
 
 	userCB(s, SRTErrno(errcode), udpAddr, int(token))
 }

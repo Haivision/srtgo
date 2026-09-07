@@ -6,6 +6,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	gopointer "github.com/mattn/go-pointer"
 )
 
 func init() {
@@ -340,4 +342,36 @@ func TestClose(t *testing.T) {
 	if len(connectCallbackMap) != 0 {
 		t.Error("Failed to delete connect callback")
 	}
+}
+
+func TestListenCallbackWrapperStalePointerDoesNotPanic(t *testing.T) {
+	ptr := gopointer.Save(ListenCallbackFunc(func(socket *SrtSocket, version int, addr *net.UDPAddr, streamid string) bool {
+		return true
+	}))
+	gopointer.Unref(ptr)
+
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("listen callback wrapper panicked with stale pointer: %v", r)
+		}
+	}()
+
+	ret := srtListenCBWrapper(ptr, 0, 0, nil, nil)
+	if ret != SRT_ERROR {
+		t.Fatalf("expected SRT_ERROR for stale callback pointer, got %d", int(ret))
+	}
+}
+
+func TestConnectCallbackWrapperStalePointerDoesNotPanic(t *testing.T) {
+	ptr := gopointer.Save(ConnectCallbackFunc(func(socket *SrtSocket, err error, addr *net.UDPAddr, token int) {
+	}))
+	gopointer.Unref(ptr)
+
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("connect callback wrapper panicked with stale pointer: %v", r)
+		}
+	}()
+
+	srtConnectCBWrapper(ptr, 0, 0, nil, 0)
 }
